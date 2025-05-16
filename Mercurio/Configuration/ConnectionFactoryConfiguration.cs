@@ -33,6 +33,8 @@ namespace Mercurio.Configuration
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionFactoryConfiguration"></see> class.
         /// </summary>
+        /// <param name="connectionName">The name of the <see cref="RabbitMQ.Client.ConnectionFactory" /> to register</param>
+        /// <param name="connectionFactoryAsync">The <see cref="Func{T, TResult}"/> that should be invoked to create a <see cref="RabbitMQ.Client.ConnectionFactory"/> asynchronously</param>
         public ConnectionFactoryConfiguration(string connectionName, Func<IServiceProvider, Task<ConnectionFactory>> connectionFactoryAsync)
         {
             if (string.IsNullOrEmpty(connectionName))
