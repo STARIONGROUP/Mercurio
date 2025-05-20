@@ -1,3 +1,16 @@
+---
+name: "Bug or Feature Report"
+about: "Report a bug or request a feature for Mercurio"
+title: "[Bug|Feature]: "
+labels: []
+assignees: []
+---
+
+### What type of issue is this?
+
+- [ ] Bug report
+- [ ] Feature request
+
 ### Prerequisites
 
 - [ ] I have written a descriptive issue title
