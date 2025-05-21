@@ -19,6 +19,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           overwrite-settings: false
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Initialize RabbitMQ
+        run: run -d --name mercurio -p 15672:15672 -p 5672:5672 rabbitmq:4-management 
+
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:

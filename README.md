@@ -2,8 +2,7 @@
 A library to make RabbitMQ integration in .NET microservices seamless
 
 ## Introduction
-Mercurio provides RabbitMQ integration with common implementation of Messaging Client. This common implementation of messaging client reduce the need of code duplication on microservices implementation that requires to interacts with RabbitMQ.
-
+Mercurio provides RabbitMQ integration with common implementation of Messaging Client. This common implementation of messaging client reduce the need of code duplication on microservices implementation that requires to interacts with RabbitMQ.  
 It also eases the setup of ConnectionFactory and also to register multiple ConnectionFactory setup, using the _IRabbitMqConnectionProvider_.
 
 ## Examples
@@ -31,13 +30,44 @@ serviceCollection.AddRabbitMqConnectionProvider()
         };
 
         return connectionFactory;
-    });
+    })
+    .WithDefaultJsonMessageSerializer();
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
 var connectionProvider = serviceProvider.GetRequiredService<IRabbitMqConnectionProvider>();
 var primaryConnection = await  connectionProvider.GetConnectionAsync("Primary");
 ```
 
+### Message Serialization
+The _MessageClientService_ requires to serialize and deserialize messages sent on RabbitMQ. For that, two interfaces are declared: IMessageDeserializerService and IMessageSerializerService.  
+A JSON basic implementation is already provided and can be registered using the _.WithDefaultJsonMessageSerializer()_ extension method on the IServiceCollection.  
+This implementation provides basic JSON serialization using the System.Text.Json library.
+
+### MessageClientService
+A base implementation of a _MessageClientService_ is available. It defines base behavior to push and listen after messages on queue and exchange.  
+Following example expects to have a connection registered, the service registered as _IMessageClientBaseService_ into the service collection and will use Direct Exchange.
+
+#### Push Message
+```csharp
+var messageClientService = serviceProvider.GetRequiredService<IMessageClientBaseService>();
+var exchangeConfiguration = new DirectExchangeConfiguration("DirectQueue", "AnExchange", "SomeRouting");
+await messageClientService.PushAsync("RegisteredConnection","A message to be sent",exchangeConfiguration);
+```
+
+#### Listen After Message
+```csharp
+var messageClientService = serviceProvider.GetRequiredService<IMessageClientBaseService>();
+var exchangeConfiguration = new DirectExchangeConfiguration("DirectQueue", "AnExchange", "SomeRouting");
+var messageObservable = await messageClientService.ListenAsync<string>("RegisteredConnection", exchangeConfiguration);
+messageObservable.Subscribe(message => Console.WriteLine(message));
+```
+
+## Integration Tests
+Before running any integration tests, it is required to have a running instance of RabbitMQ.  
+Please use this following command to run it :
+```sh
+docker run -d --name mercurio -p 15672:15672 -p 5672:5672 rabbitmq:4-management 
+```
 
 ## Code Quality
 

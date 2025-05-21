@@ -64,7 +64,8 @@ namespace Mercurio.Tests.Extensions
                     };
 
                     return connectionFactory;
-                });
+                })
+                .WithDefaultJsonMessageSerializer();
 
             var serviceProvider = this.serviceCollection.BuildServiceProvider();
             var connectionProvider = serviceProvider.GetRequiredService<IRabbitMqConnectionProvider>();
