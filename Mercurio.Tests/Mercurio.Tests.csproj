@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="6.0.2">
+        <PackageReference Include="coverlet.collector" Version="6.0.4">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
@@ -24,7 +24,10 @@
         </PackageReference>
         <PackageReference Include="NUnit3TestAdapter" Version="4.6.0"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.5" />
-        <PackageReference Include="NunitXml.TestLogger" Version="6.1.0" />
+        <PackageReference Include="coverlet.msbuild" Version="6.0.4">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
