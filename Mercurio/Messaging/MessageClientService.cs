@@ -108,11 +108,16 @@ namespace Mercurio.Messaging
             IChannel channel = null;
             AsyncEventingBasicConsumer consumer = null;
 
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+            
             try
             {
                 channel = await this.GetChannelAsync(connectionName, cancellationToken);
 
-                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclared(channel, false);
+                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channel, false);
 
                 consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.ReceivedAsync += onReceiveAsync;
@@ -191,10 +196,15 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(message), "The message to be sent can not be null");
             }
 
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+            
             try
             {
                 var channel = await this.GetChannelAsync(connectionName, cancellationToken);
-                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclared(channel, true);
+                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channel, true);
 
                 var properties = new BasicProperties
                 {
@@ -262,6 +272,11 @@ namespace Mercurio.Messaging
         {
             AsyncEventingBasicConsumer consumer = null;
 
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+
             try
             {
                 channel.CallbackExceptionAsync += ChannelOnCallbackException;
@@ -270,7 +285,7 @@ namespace Mercurio.Messaging
 
                 consumer.ReceivedAsync += ConsumerOnReceivedAsync;
                 consumer.ShutdownAsync += ConsumerOnShutdownAsync;
-                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclared(channel, false);
+                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channel, false);
                 
                 await channel.BasicConsumeAsync(exchangeConfiguration.QueueName, true, consumer, cancellationToken);
             }

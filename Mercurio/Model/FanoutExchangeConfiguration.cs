@@ -59,7 +59,7 @@ namespace Mercurio.Model
         /// <param name="channel">The <see cref="IChannel" /> that will handle the queue</param>
         /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
         /// <returns>An awaitable <see cref="Task" /></returns>
-        public override async Task EnsureQueueAndExchangeAreDeclared(IChannel channel, bool isDeclareForPush)
+        public override async Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
         {
             await channel.ExchangeDeclareAsync(this.ExchangeName, ExchangeType.Fanout, durable: true);
 
