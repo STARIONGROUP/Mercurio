@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -24,7 +25,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Initialize RabbitMQ
-        run: run -d --name mercurio -p 15672:15672 -p 5672:5672 rabbitmq:4-management 
+        run: docker run -d --name mercurio -p 15672:15672 -p 5672:5672 rabbitmq:4-management 
 
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
@@ -52,3 +53,6 @@ jobs:
         run: dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker stop
+        run: docker stop mercurio && docker rm mercurio
