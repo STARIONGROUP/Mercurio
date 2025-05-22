@@ -21,24 +21,32 @@
 namespace Mercurio.Extensions
 {
     /// <summary>
-    /// Extension methods for the <see cref="Stream" /> class 
+    /// Extension methods for the <see cref="Stream" /> class
     /// </summary>
     public static class StreamExtensions
     {
         /// <summary>
-        /// Converts the content of the provided <see cref="Stream"/> into a <see cref="ReadOnlyMemory{T}"/> of byte
+        /// Converts the content of the provided <see cref="Stream" /> into a <see cref="ReadOnlyMemory{T}" /> of byte
         /// </summary>
-        /// <param name="stream">The <see cref="Stream"/></param>
-        /// <returns>The <see cref="ReadOnlyMemory{T}"/> of byte that contains the content of the <paramref name="stream"/></returns>
+        /// <param name="stream">The <see cref="Stream" /></param>
+        /// <returns>
+        /// The <see cref="ReadOnlyMemory{T}" /> of byte that contains the content of the <paramref name="stream" />
+        /// </returns>
+        /// <exception cref="ArgumentNullException">If the provided <paramref name="stream" /> is null</exception>
         public static ReadOnlyMemory<byte> ToReadOnlyMemory(this Stream stream)
         {
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream), "The stream cannot be null");
+            }
+
             stream.Position = 0;
-            
+
             if (stream is MemoryStream memoryStream)
             {
                 return new ReadOnlyMemory<byte>(memoryStream.ToArray());
             }
-            
+
             using var temporaryStream = new MemoryStream();
             stream.CopyTo(temporaryStream);
             temporaryStream.Position = 0;
