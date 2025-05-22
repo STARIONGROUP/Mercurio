@@ -82,7 +82,7 @@ namespace Mercurio.Tests.Messaging
         }
 
         [TearDown]
-        public async Task Teardown()
+        public async Task TeardownAsync()
         {
             this.firstService.Dispose();
             this.secondService.Dispose();
@@ -90,7 +90,7 @@ namespace Mercurio.Tests.Messaging
         }
 
         [Test]
-        public async Task VerifyMessageExchangeWithDefaultExchange()
+        public async Task VerifyMessageExchangeWithDefaultExchangeAsync()
         {
             var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannel");
             var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
@@ -120,7 +120,7 @@ namespace Mercurio.Tests.Messaging
         [TestCase("DirectChannel", "", "")]
         [TestCase("DirectChannelWithExchange", "CustomNewExchange", "")]
         [TestCase("DirectChannelWithExchangeAndRouting", "CustomNewExchangeWithRouting", "RoutingKey")]
-        public async Task VerifyMessageExchangeWithDirectExchange(string queueName, string exchangeName, string routingKey)
+        public async Task VerifyMessageExchangeWithDirectExchangeAsync(string queueName, string exchangeName, string routingKey)
         {
             var exchangeConfiguration = string.IsNullOrEmpty(exchangeName) 
                 ? new DirectExchangeConfiguration(queueName, routingKey: routingKey) 
@@ -155,7 +155,7 @@ namespace Mercurio.Tests.Messaging
        [TestCase("FanoutExchange", "WithRoutingKey")]
        [TestCase("CustomNewExchangeForFanout", "")]
        [TestCase( "CustomNewExchangeWithRoutingForFanout", "RoutingKeyForFanout")]
-       public async Task VerifyMessageExchangeWithFanoutExchange(string exchangeName, string routingKey)
+       public async Task VerifyMessageExchangeWithFanoutExchangeAsync(string exchangeName, string routingKey)
        {
            var firstExchangeConfiguration = new FanoutExchangeConfiguration(exchangeName, routingKey);
            var secondExchangeConfiguration = new FanoutExchangeConfiguration(exchangeName, routingKey);
@@ -185,7 +185,7 @@ namespace Mercurio.Tests.Messaging
        }
 
        [Test]
-       public async Task VerifyAddListenerBehavior()
+       public async Task VerifyAddListenerBehaviorAsync()
        {
            var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForAddListener");
            var messageReceived = false;
@@ -200,6 +200,59 @@ namespace Mercurio.Tests.Messaging
            await Task.Delay(TimeOut);
            Assert.That(messageReceived, Is.True);
            disposable.Dispose();
+       }
+
+       [Test]
+       public async Task VerifyMessageExchangeWithTopicExchangeAsync()
+       {
+           const string exchangeName = "TopicExchange";
+           var pushExchangeConfiguration = new TopicExchangeConfiguration(exchangeName, "mercurio.topic.info");
+           var fanoutLikeExchangeConfiguration = new TopicExchangeConfiguration(exchangeName);
+           var listenWithWildCardConfiguration = new TopicExchangeConfiguration(exchangeName, "mercurio.*.*");
+           var listenWithHashConfiguration = new TopicExchangeConfiguration(exchangeName, "mercurio.#");
+           var invalidListenConfiguration = new TopicExchangeConfiguration(exchangeName, "mercurio.topic.inf");
+           
+           var fanoutObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, fanoutLikeExchangeConfiguration);
+           var listenWithWildCardObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, listenWithWildCardConfiguration);
+           var listenWithHashObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, listenWithHashConfiguration);
+           var equalRoutingObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, pushExchangeConfiguration);
+           var invalidListenObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, invalidListenConfiguration);
+
+           var fanoutTask = new TaskCompletionSource<string>();
+           var listenWithWildCardTask = new TaskCompletionSource<string>();
+           var listenWithHashTask = new TaskCompletionSource<string>();
+           var equalRoutingTask = new TaskCompletionSource<string>();
+           var invalidListenTask = new TaskCompletionSource<string>();
+
+           fanoutObservable.Subscribe(message => fanoutTask.TrySetResult(message));
+           listenWithWildCardObservable.Subscribe(message => listenWithWildCardTask.TrySetResult(message));
+           listenWithHashObservable.Subscribe(message => listenWithHashTask.TrySetResult(message));
+           equalRoutingObservable.Subscribe(message => equalRoutingTask.TrySetResult(message));
+           invalidListenObservable.Subscribe(message => invalidListenTask.TrySetResult(message));
+           
+           await Task.Delay(TimeOut);
+           await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, pushExchangeConfiguration);
+
+           var validTasks = new List<Task<string>> { fanoutTask.Task, listenWithWildCardTask.Task , listenWithHashTask.Task, equalRoutingTask.Task};
+           await Task.WhenAll(validTasks);
+
+           Assert.Multiple(() =>
+           {
+               foreach (var validTask in validTasks)
+               {
+                   Assert.That(validTask.Result, Is.EqualTo(FirstSentMessage));
+               }
+           });
+           
+           await this.firstService.PushAsync(FirstConnectionName, SecondSentMessage, pushExchangeConfiguration);
+
+           var taskWithTimeout = await Task.WhenAny(invalidListenTask.Task, Task.Delay(TimeOut));
+
+           Assert.Multiple(() =>
+           {
+               Assert.That(taskWithTimeout, Is.Not.EqualTo(invalidListenTask.Task));
+               Assert.That(invalidListenTask.Task.Status, Is.EqualTo(TaskStatus.WaitingForActivation));
+           });
        }
     }
 }
