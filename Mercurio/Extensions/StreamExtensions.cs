@@ -36,7 +36,7 @@ namespace Mercurio.Extensions
             
             if (stream is MemoryStream memoryStream)
             {
-                return new ReadOnlyMemory<byte>(memoryStream.GetBuffer());
+                return new ReadOnlyMemory<byte>(memoryStream.ToArray());
             }
             
             using var temporaryStream = new MemoryStream();

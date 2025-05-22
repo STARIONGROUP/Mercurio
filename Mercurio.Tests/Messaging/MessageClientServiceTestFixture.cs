@@ -187,7 +187,7 @@ namespace Mercurio.Tests.Messaging
        [Test]
        public async Task VerifyAddListenerBehavior()
        {
-           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannel");
+           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForAddListener");
            var messageReceived = false;
            
            var disposable = await this.firstService.AddListenerAsync(FirstConnectionName, exchangeConfiguration, (_,_) =>

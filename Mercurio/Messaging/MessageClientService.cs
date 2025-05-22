@@ -24,6 +24,8 @@ namespace Mercurio.Messaging
     using System.Reactive.Linq;
     using System.Text;
 
+    using CommunityToolkit.HighPerformance;
+
     using Mercurio.Configuration;
     using Mercurio.Extensions;
     using Mercurio.Model;
@@ -387,8 +389,8 @@ namespace Mercurio.Messaging
             async Task ConsumerOnReceivedAsync(object o, BasicDeliverEventArgs message)
             {
                 this.OnMessageReceive(message, exchangeConfiguration);
-                using var memoryStream = new MemoryStream(message.Body.ToArray());
-                var content = await this.DeserializerService.DeserializeAsync<TMessage>(memoryStream, cancellationToken);
+                using var stream = message.Body.AsStream();
+                var content = await this.DeserializerService.DeserializeAsync<TMessage>(stream, cancellationToken);
                 observer.OnNext(content);
                 await Task.CompletedTask;
             }
