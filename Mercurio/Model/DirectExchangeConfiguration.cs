@@ -63,10 +63,25 @@ namespace Mercurio.Model
         /// <param name="channel">The <see cref="IChannel" /> that will handle the queue</param>
         /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
         /// <returns>An awaitable <see cref="Task" /></returns>
-        public override async Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
+        /// <exception cref="ArgumentNullException">If the provided <paramref name="channel"/> is null</exception>
+        public override Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
         {
-            await base.EnsureQueueAndExchangeAreDeclaredAsync(channel, isDeclareForPush);
-            
+            if (channel == null)
+            {
+                throw new ArgumentNullException(nameof(channel), "The channel cannot be null");
+            }
+
+            return this.EnsureQueueAndExchangeAreDeclaredInternalAsync(channel, isDeclareForPush);
+        }
+
+        /// <summary>
+        /// Declares the message queue if not declared yet
+        /// </summary>
+        /// <param name="channel">The <see cref="IChannel" /> that will handle the queue</param>
+        /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        private async Task EnsureQueueAndExchangeAreDeclaredInternalAsync(IChannel channel, bool isDeclareForPush)
+        {
             if (!string.IsNullOrEmpty(this.ExchangeName))
             {
                 if (this.ExchangeName != PreDefinedDirectExchangeName)

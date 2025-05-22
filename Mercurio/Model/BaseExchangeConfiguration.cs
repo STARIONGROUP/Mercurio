@@ -75,15 +75,6 @@ namespace Mercurio.Model
         /// <param name="channel">The <see cref="IChannel" /> that will handle the queue</param>
         /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
         /// <returns>An awaitable <see cref="Task" /></returns>
-        /// <exception cref="ArgumentNullException">If the provided <paramref name="channel"/> is null</exception>
-        public virtual Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
-        {
-            if (channel == null)
-            {
-                throw new ArgumentNullException(nameof(channel), "The channel cannot be null.");
-            }
-            
-            return Task.CompletedTask;
-        }
+        public abstract Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush);
     }
 }

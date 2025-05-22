@@ -84,20 +84,14 @@ namespace Mercurio.Messaging
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
         /// <returns>An observable sequence of messages.</returns>
-        public override async Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default)
+        public override Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default)
         {
             if (exchangeConfiguration == null)
             {
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
-            
-            var channel = await this.GetChannelAsync(connectionName, cancellationToken);
 
-            return Observable.Create<TMessage>(async observer =>
-            {
-                var disposables = await this.InitializeListenerAsync(observer, channel, exchangeConfiguration, cancellationToken);
-                return Disposable.Create(() => disposables.Dispose());
-            });
+            return this.ListenInternalAsync<TMessage>(connectionName, exchangeConfiguration, cancellationToken);
         }
 
         /// <summary>
@@ -119,6 +113,105 @@ namespace Mercurio.Messaging
         }
 
         /// <summary>
+        /// Pushes the specified <paramref name="messages" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            if (messages == null)
+            {
+                throw new ArgumentException("The messages collection cannot be null", nameof(messages));
+            }
+
+            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            if (Equals(message, default(TMessage)))
+            {
+                throw new ArgumentNullException(nameof(message), "The message to be sent can not be null");
+            }
+
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+
+            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Declares specific action that could be performed while a message has been received (e.g. to record new circuit Activity, for traceability).
+        /// </summary>
+        /// <param name="message">The <typeparamref name="TMessage" /></param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <typeparam name="TMessage">Any object</typeparam>
+        protected virtual void OnMessageReceive<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration)
+        {
+        }
+
+        /// <summary>
+        /// Declares specific action that could be performed before pushing a new message (e.g. to record new circuit Activity, for traceability).
+        /// </summary>
+        /// <param name="message">The <typeparamref name="TMessage" /></param>
+        /// <param name="properties">
+        /// The <see cref="BasicProperties" /> that will be used to sent the <paramref name="message" />
+        /// </param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <typeparam name="TMessage">Any object</typeparam>
+        protected virtual void OnPrePush<TMessage>(TMessage message, BasicProperties properties, IExchangeConfiguration exchangeConfiguration)
+        {
+        }
+
+        /// <summary>
+        /// Listens for messages of type <typeparamref name="TMessage" /> on the specified queue.
+        /// </summary>
+        /// <typeparam name="TMessage">The type of messages to listen for.</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
+        /// <returns>An observable sequence of messages.</returns>
+        private async Task<IObservable<TMessage>> ListenInternalAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken)
+            where TMessage : class
+        {
+            var channel = await this.GetChannelAsync(connectionName, cancellationToken);
+
+            return Observable.Create<TMessage>(async observer =>
+            {
+                var disposables = await this.InitializeListenerAsync(observer, channel, exchangeConfiguration, cancellationToken);
+                return Disposable.Create(() => disposables.Dispose());
+            });
+        }
+
+        /// <summary>
         /// Adds a listener to the specified queue
         /// </summary>
         /// <param name="connectionName">The name of the registered connection to use.</param>
@@ -130,7 +223,7 @@ namespace Mercurio.Messaging
         {
             IChannel channel = null;
             AsyncEventingBasicConsumer consumer = null;
-            
+
             try
             {
                 channel = await this.GetChannelAsync(connectionName, cancellationToken);
@@ -184,48 +277,12 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override async Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
-            if (messages == null)
-            {
-                throw new ArgumentException("The messages collection cannot be null", nameof(messages));
-            }
-
             foreach (var message in messages)
             {
                 await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
             }
-        }
-
-        /// <summary>
-        /// Pushes the specified <paramref name="message" /> to the specified queue via the
-        /// <paramref name="exchangeConfiguration" />
-        /// </summary>
-        /// <typeparam name="TMessage">The type of message</typeparam>
-        /// <param name="connectionName">The name of the registered connection to use.</param>
-        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
-        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
-        /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
-        /// <returns>An awaitable <see cref="Task" /></returns>
-        /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
-        /// <remarks>
-        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
-        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
-        /// </remarks>
-        public override async Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
-        {
-            if (Equals(message, default(TMessage)))
-            {
-                throw new ArgumentNullException(nameof(message), "The message to be sent can not be null");
-            }
-
-            if (exchangeConfiguration == null)
-            {
-                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
-            }
-            
-            await this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
         }
 
         /// <summary>
@@ -263,8 +320,8 @@ namespace Mercurio.Messaging
 
                 var body = await this.SerializerService.SerializeAsync(message, cancellationToken);
 
-                var routingKey = !string.IsNullOrEmpty(exchangeConfiguration.RoutingKey) || !string.IsNullOrEmpty(exchangeConfiguration.ExchangeName) 
-                    ? exchangeConfiguration.RoutingKey 
+                var routingKey = !string.IsNullOrEmpty(exchangeConfiguration.RoutingKey) || !string.IsNullOrEmpty(exchangeConfiguration.ExchangeName)
+                    ? exchangeConfiguration.RoutingKey
                     : exchangeConfiguration.QueueName;
 
                 await channel.BasicPublishAsync(exchangeConfiguration.PushExchangeName,
@@ -278,29 +335,6 @@ namespace Mercurio.Messaging
             {
                 this.Logger.LogError(exception, "The message {MessageName} could not be queued to {MessageQueue} reason : {Exception}", typeof(TMessage).Name, exchangeConfiguration.QueueName, exception.Message);
             }
-        }
-
-        /// <summary>
-        /// Declares specific action that could be performed while a message has been received (e.g. to record new circuit Activity, for traceability).
-        /// </summary>
-        /// <param name="message">The <typeparamref name="TMessage" /></param>
-        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
-        /// <typeparam name="TMessage">Any object</typeparam>
-        protected virtual void OnMessageReceive<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration)
-        {
-        }
-
-        /// <summary>
-        /// Declares specific action that could be performed before pushing a new message (e.g. to record new circuit Activity, for traceability).
-        /// </summary>
-        /// <param name="message">The <typeparamref name="TMessage" /></param>
-        /// <param name="properties">
-        /// The <see cref="BasicProperties" /> that will be used to sent the <paramref name="message" />
-        /// </param>
-        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
-        /// <typeparam name="TMessage">Any object</typeparam>
-        protected virtual void OnPrePush<TMessage>(TMessage message, BasicProperties properties, IExchangeConfiguration exchangeConfiguration)
-        {
         }
 
         /// <summary>
@@ -326,7 +360,7 @@ namespace Mercurio.Messaging
                 consumer.ReceivedAsync += ConsumerOnReceivedAsync;
                 consumer.ShutdownAsync += ConsumerOnShutdownAsync;
                 await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channel, false);
-                
+
                 await channel.BasicConsumeAsync(exchangeConfiguration.QueueName, true, consumer, cancellationToken);
             }
             catch (Exception exception)

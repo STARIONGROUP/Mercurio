@@ -23,22 +23,20 @@ namespace Mercurio.Model
     using RabbitMQ.Client;
 
     /// <summary>
-    /// The <see cref="FanoutExchangeConfiguration" /> is a <see cref="BaseExchangeConfiguration"/> for the Fanout exchange
+    /// The <see cref="FanoutExchangeConfiguration" /> is a <see cref="BaseExchangeConfiguration" /> for the Fanout exchange
     /// </summary>
-    public class FanoutExchangeConfiguration: BaseExchangeConfiguration
+    public class FanoutExchangeConfiguration : BaseExchangeConfiguration
     {
-        /// <summary>
-        /// Gets the name of the exchange that should be used to push message
-        /// </summary>
-        public override string PushExchangeName => this.ExchangeName;
-
         /// <summary>
         /// Gets the name of the pre-defined exchange name
         /// </summary>
         public const string PreDefinedFanoutExchangeName = "amq.fanout";
-        
+
         /// <summary>Initializes a new instance of the <see cref="FanoutExchangeConfiguration"></see> class.</summary>
-        /// <param name="exchangeName">A specific name for the exchange to use. Default value is <see cref="PreDefinedFanoutExchangeName"/>. In case of empty, an exchange based on the queue name will be created.</param>
+        /// <param name="exchangeName">
+        /// A specific name for the exchange to use. Default value is
+        /// <see cref="PreDefinedFanoutExchangeName" />. In case of empty, an exchange based on the queue name will be created.
+        /// </param>
         /// <param name="routingKey">Defines a specific routing key to be used. Default value is <i>string.empty</i>.</param>
         /// <param name="isTemporary">
         /// Asserts that the queue should be a temporary one or not. In case of a temporary queue, the queue is automatically deleted when the consumer
@@ -54,15 +52,36 @@ namespace Mercurio.Model
         }
 
         /// <summary>
+        /// Gets the name of the exchange that should be used to push message
+        /// </summary>
+        public override string PushExchangeName => this.ExchangeName;
+
+        /// <summary>
         /// Declares the message queue if not declared yet
         /// </summary>
         /// <param name="channel">The <see cref="IChannel" /> that will handle the queue</param>
         /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
         /// <returns>An awaitable <see cref="Task" /></returns>
-        public override async Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
+        /// <exception cref="ArgumentNullException">If the provided <paramref name="channel" /> is null</exception>
+        public override Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
         {
-            await base.EnsureQueueAndExchangeAreDeclaredAsync(channel, isDeclareForPush);
-            await channel.ExchangeDeclareAsync(this.ExchangeName, ExchangeType.Fanout, durable: true);
+            if (channel == null)
+            {
+                throw new ArgumentNullException(nameof(channel), "The channel cannot be null");
+            }
+
+            return this.EnsureQueueAndExchangeAreDeclaredInternalAsync(channel, isDeclareForPush);
+        }
+
+        /// <summary>
+        /// Declares the message queue if not declared yet
+        /// </summary>
+        /// <param name="channel">The <see cref="IChannel" /> that will handle the queue</param>
+        /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        private async Task EnsureQueueAndExchangeAreDeclaredInternalAsync(IChannel channel, bool isDeclareForPush)
+        {
+            await channel.ExchangeDeclareAsync(this.ExchangeName, ExchangeType.Fanout, true);
 
             if (isDeclareForPush)
             {
