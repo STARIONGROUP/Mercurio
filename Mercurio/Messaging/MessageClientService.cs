@@ -121,7 +121,7 @@ namespace Mercurio.Messaging
 
                 consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.ReceivedAsync += onReceiveAsync;
-                consumer.ReceivedAsync += HandleActivityUpdateAsync;
+                consumer.ReceivedAsync += OnMessageReceiveAsync;
 
                 await channel.BasicConsumeAsync(exchangeConfiguration.QueueName, true, consumer, cancellationToken);
             }
@@ -133,18 +133,19 @@ namespace Mercurio.Messaging
             {
                 this.Logger.LogError(exception, "Error while adding a listener to the {QueueName}", exchangeConfiguration.QueueName);
             }
-            finally
+
+            return Disposable.Create(async () =>
             {
                 if (consumer != null)
                 {
                     consumer.ReceivedAsync -= onReceiveAsync;
-                    consumer.ReceivedAsync -= HandleActivityUpdateAsync;
+                    consumer.ReceivedAsync -= OnMessageReceiveAsync;
                 }
-            }
 
-            return channel;
+                channel?.Dispose();
+            });
 
-            Task HandleActivityUpdateAsync(object _, BasicDeliverEventArgs m)
+            Task OnMessageReceiveAsync(object _, BasicDeliverEventArgs m)
             {
                 return Task.Run(() => this.OnMessageReceive(m, exchangeConfiguration), cancellationToken);
             }

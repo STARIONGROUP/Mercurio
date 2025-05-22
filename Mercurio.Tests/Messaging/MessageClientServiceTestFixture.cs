@@ -183,5 +183,23 @@ namespace Mercurio.Tests.Messaging
                }
            });
        }
+
+       [Test]
+       public async Task VerifyAddListenerBehavior()
+       {
+           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannel");
+           var messageReceived = false;
+           
+           var disposable = await this.firstService.AddListenerAsync(FirstConnectionName, exchangeConfiguration, (_,_) =>
+           {
+               return Task.Run(() => messageReceived = true);
+           });
+           
+           await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+           
+           await Task.Delay(TimeOut);
+           Assert.That(messageReceived, Is.True);
+           disposable.Dispose();
+       }
     }
 }
