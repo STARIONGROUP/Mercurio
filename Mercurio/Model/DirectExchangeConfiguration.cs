@@ -65,6 +65,8 @@ namespace Mercurio.Model
         /// <returns>An awaitable <see cref="Task" /></returns>
         public override async Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush)
         {
+            await base.EnsureQueueAndExchangeAreDeclaredAsync(channel, isDeclareForPush);
+            
             if (!string.IsNullOrEmpty(this.ExchangeName))
             {
                 if (this.ExchangeName != PreDefinedDirectExchangeName)

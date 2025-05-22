@@ -86,6 +86,11 @@ namespace Mercurio.Messaging
         /// <returns>An observable sequence of messages.</returns>
         public override async Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default)
         {
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+            
             var channel = await this.GetChannelAsync(connectionName, cancellationToken);
 
             return Observable.Create<TMessage>(async observer =>
@@ -103,15 +108,28 @@ namespace Mercurio.Messaging
         /// <param name="onReceiveAsync">The <see cref="AsyncEventHandler{TEvent}" /></param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <return>A <see cref="Task" /> of <see cref="IDisposable" /></return>
-        public override async Task<IDisposable> AddListenerAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken = default)
+        public override Task<IDisposable> AddListenerAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken = default)
         {
-            IChannel channel = null;
-            AsyncEventingBasicConsumer consumer = null;
-
             if (exchangeConfiguration == null)
             {
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
+
+            return this.AddListenerInternalAsync(connectionName, exchangeConfiguration, onReceiveAsync, cancellationToken);
+        }
+
+        /// <summary>
+        /// Adds a listener to the specified queue
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="onReceiveAsync">The <see cref="AsyncEventHandler{TEvent}" /></param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <return>A <see cref="Task" /> of <see cref="IDisposable" /></return>
+        private async Task<IDisposable> AddListenerInternalAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken)
+        {
+            IChannel channel = null;
+            AsyncEventingBasicConsumer consumer = null;
             
             try
             {
@@ -134,7 +152,7 @@ namespace Mercurio.Messaging
                 this.Logger.LogError(exception, "Error while adding a listener to the {QueueName}", exchangeConfiguration.QueueName);
             }
 
-            return Disposable.Create(async () =>
+            return Disposable.Create(() =>
             {
                 if (consumer != null)
                 {
@@ -168,6 +186,11 @@ namespace Mercurio.Messaging
         /// </remarks>
         public override async Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
+            if (messages == null)
+            {
+                throw new ArgumentException("The messages collection cannot be null", nameof(messages));
+            }
+
             foreach (var message in messages)
             {
                 await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
@@ -202,6 +225,27 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
             
+            await this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        {
             try
             {
                 var channel = await this.GetChannelAsync(connectionName, cancellationToken);
@@ -272,11 +316,6 @@ namespace Mercurio.Messaging
             CancellationToken cancellationToken = default) where TMessage : class
         {
             AsyncEventingBasicConsumer consumer = null;
-
-            if (exchangeConfiguration == null)
-            {
-                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
-            }
 
             try
             {
