@@ -25,6 +25,7 @@ namespace Mercurio.Messaging
     using System.Text;
 
     using Mercurio.Configuration;
+    using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
     using Mercurio.Serializer;
@@ -318,17 +319,19 @@ namespace Mercurio.Messaging
                 configureProperties?.Invoke(properties);
                 this.OnPrePush(message, properties, exchangeConfiguration);
 
-                var body = await this.SerializerService.SerializeAsync(message, cancellationToken);
+                var stream = await this.SerializerService.SerializeAsync(message, cancellationToken);
 
                 var routingKey = !string.IsNullOrEmpty(exchangeConfiguration.RoutingKey) || !string.IsNullOrEmpty(exchangeConfiguration.ExchangeName)
                     ? exchangeConfiguration.RoutingKey
                     : exchangeConfiguration.QueueName;
 
+                var body = stream.ToReadOnlyMemory();
+                
                 await channel.BasicPublishAsync(exchangeConfiguration.PushExchangeName,
                     routingKey, false, properties,
                     body, cancellationToken);
 
-                this.Logger.LogDebug("Message Body {Body}", Encoding.UTF8.GetString(body));
+                this.Logger.LogDebug("Message Body {Body}", Encoding.UTF8.GetString(body.ToArray()));
                 this.Logger.LogInformation("Message {MessageName} sent to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
             }
             catch (Exception exception)
@@ -384,7 +387,8 @@ namespace Mercurio.Messaging
             async Task ConsumerOnReceivedAsync(object o, BasicDeliverEventArgs message)
             {
                 this.OnMessageReceive(message, exchangeConfiguration);
-                var content = await this.DeserializerService.DeserializeAsync<TMessage>(message.Body, cancellationToken);
+                using var memoryStream = new MemoryStream(message.Body.ToArray());
+                var content = await this.DeserializerService.DeserializeAsync<TMessage>(memoryStream, cancellationToken);
                 observer.OnNext(content);
                 await Task.CompletedTask;
             }

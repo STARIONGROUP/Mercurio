@@ -36,28 +36,31 @@ namespace Mercurio.Serializer
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
-        
+
         /// <summary>
         /// Serializes an <see cref="object"/> into a <see cref="byte"/> array asynchronously
         /// </summary>
         /// <param name="obj">The object to serialize</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task{TResult}"/> that results as the serialized object as <see cref="byte"/> array</returns>
-        public Task<byte[]> SerializeAsync(object obj, CancellationToken cancellationToken = default)
+        public async Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(JsonSerializer.SerializeToUtf8Bytes(obj, JsonWriterOptions)); 
+            var memoryStream = new MemoryStream();
+            await JsonSerializer.SerializeAsync(memoryStream, obj, JsonWriterOptions, cancellationToken);
+            memoryStream.Position = 0;
+            return memoryStream;
         }
-        
+
         /// <summary>
         /// Deserializes the content of a RabbitMQ into a <typeparamref name="TMessage" />
         /// </summary>
-        /// <param name="content">The <see cref="ReadOnlyMemory{T}" /> of <see cref="byte" /> that contains serialized message sent via RabbitMQ</param>
+        /// <param name="content">The <see cref="Stream"/> that contains serialized message sent via RabbitMQ</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <typeparam name="TMessage">Any object</typeparam>
         /// <returns>An awaitable <see cref="Task{TResult}" /> with the deserialized <typeparamref name="TMessage" /></returns>
-        public Task<TMessage> DeserializeAsync<TMessage>(ReadOnlyMemory<byte> content, CancellationToken cancellationToken = default)
+        public async Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(JsonSerializer.Deserialize<TMessage>(content.Span, JsonWriterOptions));
+            return await JsonSerializer.DeserializeAsync<TMessage>(content, JsonWriterOptions, cancellationToken);
         }
     }
 }

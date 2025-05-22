@@ -30,7 +30,7 @@ namespace Mercurio.Serializer
         /// </summary>
         /// <param name="obj">The object to serialize</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
-        /// <returns>An awaitable <see cref="Task{TResult}"/> that results as the serialized object as <see cref="byte"/> array</returns>
-        Task<byte[]> SerializeAsync(object obj, CancellationToken cancellationToken = default);
+        /// <returns>An awaitable <see cref="Task{TResult}"/> that results as the serialized object as <see cref="Stream"/></returns>
+        Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default);
     }
 }

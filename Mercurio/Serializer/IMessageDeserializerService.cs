@@ -28,10 +28,10 @@ namespace Mercurio.Serializer
         /// <summary>
         /// Deserializes the content of a RabbitMQ into a <typeparamref name="TMessage" />
         /// </summary>
-        /// <param name="content">The <see cref="ReadOnlyMemory{T}" /> of <see cref="byte" /> that contains serialized message sent via RabbitMQ</param>
+        /// <param name="content">The <see cref="Stream"/> that contains serialized message sent via RabbitMQ</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <typeparam name="TMessage">Any object</typeparam>
         /// <returns>An awaitable <see cref="Task{TResult}" /> with the deserialized <typeparamref name="TMessage" /></returns>
-        Task<TMessage> DeserializeAsync<TMessage>(ReadOnlyMemory<byte> content, CancellationToken cancellationToken = default);
+        Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default);
     }
 }
