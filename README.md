@@ -81,3 +81,7 @@ docker run -d --name mercurio -p 15672:15672 -p 5672:5672 rabbitmq:4-management
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=STARIONGROUP_Mercurio&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=STARIONGROUP_Mercurio)
 [![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=STARIONGROUP_Mercurio&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=STARIONGROUP_Mercurio)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=STARIONGROUP_Mercurio&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=STARIONGROUP_Mercurio)
+
+## Nuget
+The Mercurio library is released as NuGet package and available from [nuget.org](https://www.nuget.org/packages?q=mercurio).  
+![NuGet Badge](https://img.shields.io/nuget/v/Mercurio)
