@@ -1,0 +1,174 @@
+﻿// -------------------------------------------------------------------------------------------------
+//  <copyright file="RpcServerService.cs" company="Starion Group S.A.">
+// 
+//    Copyright 2025 Starion Group S.A.
+// 
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+// 
+//        http://www.apache.org/licenses/LICENSE-2.0
+// 
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+// 
+//  </copyright>
+//  ------------------------------------------------------------------------------------------------
+
+namespace Mercurio.Messaging
+{
+    using System.Reactive.Disposables;
+
+    using CommunityToolkit.HighPerformance;
+
+    using Mercurio.Configuration;
+    using Mercurio.Extensions;
+    using Mercurio.Model;
+    using Mercurio.Provider;
+    using Mercurio.Serializer;
+
+    using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
+
+    using RabbitMQ.Client;
+    using RabbitMQ.Client.Events;
+
+    /// <summary>
+    /// The <see cref="RpcServerService " /> is a <see cref="MessageClientService" /> that supports the RPC protocol implementation of RabbitMQ on the server side
+    /// </summary>
+    public class RpcServerService : MessageClientService, IRpcServerService
+    {
+        /// <summary>
+        /// Initializes a new instance of <see cref="RpcServerService" />
+        /// </summary>
+        /// <param name="connectionProvider">
+        /// The injected <see cref="IRabbitMqConnectionProvider" /> <see cref="IConnection" />
+        /// access based on registered <see cref="ConnectionFactory" />
+        /// </param>
+        /// <param name="serializerService">The injected <see cref="IMessageSerializerService" /> that will provide message serialization capabilities</param>
+        /// <param name="deserializerService">The injected <see cref="IMessageDeserializerService" /> that will provide message deserialization capabalities</param>
+        /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
+        /// <param name="policyConfiguration">
+        /// The optional injected and configured <see cref="IOptions{TOptions}" /> of
+        /// <see cref="RetryPolicyConfiguration" />. In case of null, using default value of
+        /// <see cref="MessageClientBaseService.retryPolicyConfiguration" />
+        /// </param>
+        public RpcServerService(IRabbitMqConnectionProvider connectionProvider, IMessageSerializerService serializerService, IMessageDeserializerService deserializerService,
+            ILogger<RpcServerService> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, serializerService, deserializerService, logger, policyConfiguration)
+        {
+        }
+
+        /// <summary>
+        /// Listens for request, execute the <paramref name="onReceiveAsync" /> action to process the request, and send the response back to the
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="queueName">The name of the listening queue</param>
+        /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
+        /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
+        /// <returns>An awaitable <see cref="Task" /> with an <see cref="IDisposable" /></returns>
+        /// <exception cref="ArgumentNullException">
+        /// If the <paramref name="queueName" /> is not set or if the
+        /// <paramref name="onReceiveAsync" /> is null
+        /// </exception>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(queueName))
+            {
+                throw new ArgumentNullException(nameof(queueName), "The queue name must be set.");
+            }
+
+            if (onReceiveAsync == null)
+            {
+                throw new ArgumentNullException(nameof(onReceiveAsync), "The OnReceiveAsync cannot be null.");
+            }
+
+            return this.ListenForRequestInternalAsync(connectionName, queueName, onReceiveAsync, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Listens for request, execute the <paramref name="onReceiveAsync" /> action to process the request, and send the response back to the
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="queueName">The name of the listening queue</param>
+        /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
+        /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
+        /// <returns>An awaitable <see cref="Task" /> with an <see cref="IDisposable" /></returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        private async Task<IDisposable> ListenForRequestInternalAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        {
+            AsyncEventingBasicConsumer consumer = null;
+            IChannel channel = null;
+            
+            try
+            {
+                channel = await this.GetChannelAsync(connectionName, cancellationToken);
+                await channel.QueueDeclareAsync(queueName, false, false, false, cancellationToken: cancellationToken);
+                await channel.BasicQosAsync(0, 1, false, cancellationToken);
+                
+                consumer = new AsyncEventingBasicConsumer(channel);
+                consumer.ReceivedAsync += OnMessageReceiveAsync;
+                
+                await channel.BasicConsumeAsync(queueName, false, consumer, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                this.Logger.LogError(exception, "Error during the RPC server process: {ExceptionMessage}", exception.Message);
+            }
+            
+            return Disposable.Create(() =>
+            {
+                if (consumer != null)
+                {
+                    consumer.ReceivedAsync -= OnMessageReceiveAsync;
+                }
+
+                channel?.Dispose();
+            });
+            
+            async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs args)
+            {
+                this.OnMessageReceive(args, new DefaultExchangeConfiguration(queueName));
+                var request = await this.DeserializerService.DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
+                var response =await onReceiveAsync(request);
+                
+                var cons = (AsyncEventingBasicConsumer)sender;
+                var exchangeChannel = cons.Channel;
+
+                var properties = new BasicProperties
+                {
+                    Type = typeof(TResponse).Name,
+                    ContentType = "application/json"
+                };
+                
+                configureProperties?.Invoke(properties);
+                var receivedProperties = args.BasicProperties;
+                
+                properties.CorrelationId = receivedProperties.CorrelationId;
+                var serializedResponse = await this.SerializerService.SerializeAsync(response, cancellationToken);
+
+                await exchangeChannel.BasicPublishAsync(exchange: string.Empty, receivedProperties.ReplyTo!, mandatory: true, basicProperties: properties, body:
+                    serializedResponse.ToReadOnlyMemory(), cancellationToken);
+                
+                await exchangeChannel.BasicAckAsync(args.DeliveryTag, false, cancellationToken);
+            }
+        }
+    }
+}
