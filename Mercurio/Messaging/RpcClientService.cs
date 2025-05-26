@@ -104,7 +104,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(rpcServerQueueName), "The rpc server queue name have to be provided");
             }
 
-            if (EqualityComparer<TRequest>.Default.Equals(request, default(TRequest)))
+            if (EqualityComparer<TRequest>.Default.Equals(request, default))
             {
                 throw new ArgumentNullException(nameof(request), "The request message must not be null");
             }
@@ -285,6 +285,9 @@ namespace Mercurio.Messaging
             /// </summary>
             public string QueueName { get; }
 
+            /// <summary>
+            /// Gets the specific <see cref="IDisposable" /> tied to the created consumer
+            /// </summary>
             public IDisposable ConsumerRegistrationDisposable { get; }
         }
     }

@@ -112,16 +112,16 @@ namespace Mercurio.Messaging
         {
             AsyncEventingBasicConsumer consumer = null;
             IChannel channel = null;
-            
+
             try
             {
                 channel = await this.GetChannelAsync(connectionName, cancellationToken);
                 await channel.QueueDeclareAsync(queueName, false, false, false, cancellationToken: cancellationToken);
                 await channel.BasicQosAsync(0, 1, false, cancellationToken);
-                
+
                 consumer = new AsyncEventingBasicConsumer(channel);
                 consumer.ReceivedAsync += OnMessageReceiveAsync;
-                
+
                 await channel.BasicConsumeAsync(queueName, false, consumer, cancellationToken);
             }
             catch (TimeoutException)
@@ -132,7 +132,7 @@ namespace Mercurio.Messaging
             {
                 this.Logger.LogError(exception, "Error during the RPC server process: {ExceptionMessage}", exception.Message);
             }
-            
+
             return Disposable.Create(() =>
             {
                 if (consumer != null)
@@ -142,33 +142,49 @@ namespace Mercurio.Messaging
 
                 channel?.Dispose();
             });
-            
+
             async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs args)
             {
-                this.OnMessageReceive(args, new DefaultExchangeConfiguration(queueName));
-                var request = await this.DeserializerService.DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
-                var response =await onReceiveAsync(request);
-                
-                var cons = (AsyncEventingBasicConsumer)sender;
-                var exchangeChannel = cons.Channel;
-
-                var properties = new BasicProperties
-                {
-                    Type = typeof(TResponse).Name,
-                    ContentType = "application/json"
-                };
-                
-                configureProperties?.Invoke(properties);
-                var receivedProperties = args.BasicProperties;
-                
-                properties.CorrelationId = receivedProperties.CorrelationId;
-                var serializedResponse = await this.SerializerService.SerializeAsync(response, cancellationToken);
-
-                await exchangeChannel.BasicPublishAsync(exchange: string.Empty, receivedProperties.ReplyTo!, mandatory: true, basicProperties: properties, body:
-                    serializedResponse.ToReadOnlyMemory(), cancellationToken);
-                
-                await exchangeChannel.BasicAckAsync(args.DeliveryTag, false, cancellationToken);
+                await this.OnRequestReceivedAsync(sender, args, queueName, onReceiveAsync, configureProperties, cancellationToken);
             }
+        }
+
+        /// <summary>
+        /// Handles the behabviour to handle the reception of a request
+        /// </summary>
+        /// <param name="sender">The original event sender</param>
+        /// <param name="args">The <see cref="BasicDeliverEventArgs" /> of the request</param>
+        /// <param name="queueName">The name of the used queue</param>
+        /// <param name="onReceiveAsync">The action to perform to compute the <typeparamref name="TResponse" /></param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
+        /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        private async Task OnRequestReceivedAsync<TRequest, TResponse>(object sender, BasicDeliverEventArgs args, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        {
+            this.OnMessageReceive(args, new DefaultExchangeConfiguration(queueName));
+            var request = await this.DeserializerService.DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
+            var response = await onReceiveAsync(request);
+
+            var consumer = (AsyncEventingBasicConsumer)sender;
+            var exchangeChannel = consumer.Channel;
+
+            var properties = new BasicProperties
+            {
+                Type = typeof(TResponse).Name,
+                ContentType = "application/json"
+            };
+
+            configureProperties?.Invoke(properties);
+            var receivedProperties = args.BasicProperties;
+
+            properties.CorrelationId = receivedProperties.CorrelationId;
+            var serializedResponse = await this.SerializerService.SerializeAsync(response, cancellationToken);
+
+            await exchangeChannel.BasicPublishAsync(string.Empty, receivedProperties.ReplyTo!, true, properties, serializedResponse.ToReadOnlyMemory(), cancellationToken);
+
+            await exchangeChannel.BasicAckAsync(args.DeliveryTag, false, cancellationToken);
         }
     }
 }
