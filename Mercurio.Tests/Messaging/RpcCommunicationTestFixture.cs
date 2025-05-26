@@ -31,6 +31,8 @@ namespace Mercurio.Tests.Messaging
     using RabbitMQ.Client;
 
     [TestFixture]
+    [Category("Integration")]
+    [NonParallelizable]
     public class RpcCommunicationTestFixture
     {
         private IRpcClientService<string> rpcClientService;
