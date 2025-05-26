@@ -71,7 +71,7 @@ namespace Mercurio.Messaging
         /// <see cref="MessageClientBaseService.retryPolicyConfiguration" />
         /// </param>
         public RpcClientService(IRabbitMqConnectionProvider connectionProvider, IMessageSerializerService serializerService, IMessageDeserializerService deserializerService,
-            ILogger<RpcClientService> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, serializerService, deserializerService, logger, policyConfiguration)
+            ILogger<RpcClientService<TResponse>> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, serializerService, deserializerService, logger, policyConfiguration)
         {
         }
 
