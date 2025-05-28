@@ -1,0 +1,294 @@
+﻿// -------------------------------------------------------------------------------------------------
+//  <copyright file="RpcClientService.cs" company="Starion Group S.A.">
+// 
+//    Copyright 2025 Starion Group S.A.
+// 
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+// 
+//        http://www.apache.org/licenses/LICENSE-2.0
+// 
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+// 
+//  </copyright>
+//  ------------------------------------------------------------------------------------------------
+
+namespace Mercurio.Messaging
+{
+    using System.Collections.Concurrent;
+    using System.Reactive.Disposables;
+    using System.Reactive.Linq;
+
+    using CommunityToolkit.HighPerformance;
+
+    using Mercurio.Configuration;
+    using Mercurio.Extensions;
+    using Mercurio.Provider;
+    using Mercurio.Serializer;
+
+    using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
+
+    using RabbitMQ.Client;
+    using RabbitMQ.Client.Events;
+
+    /// <summary>
+    /// The <see cref="RpcClientService{TResponse} " /> is a <see cref="MessageClientService" /> that supports the RPC protocol implementation of RabbitMQ on the client side
+    /// </summary>
+    /// <typeparam name="TResponse">Any type that correspond to the kind of response that the server should reply</typeparam>
+    public class RpcClientService<TResponse> : MessageClientService, IRpcClientService<TResponse>
+    {
+        /// <summary>
+        /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}" /> that stores, per request,
+        /// <see cref="TaskCompletionSource{TResult}" /> handler
+        /// </summary>
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<TResponse>> callbacks = new();
+
+        /// <summary>
+        /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}" /> that stores, per connection name, the initialized
+        /// <see cref="RpcQueueDeclared" />
+        /// </summary>
+        private readonly ConcurrentDictionary<string, RpcQueueDeclared> rpcQueueDeclareds = [];
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="RpcClientService{TResponse}" />
+        /// </summary>
+        /// <param name="connectionProvider">
+        /// The injected <see cref="IRabbitMqConnectionProvider" /> <see cref="IConnection" />
+        /// access based on registered <see cref="ConnectionFactory" />
+        /// </param>
+        /// <param name="serializerService">The injected <see cref="IMessageSerializerService" /> that will provide message serialization capabilities</param>
+        /// <param name="deserializerService">The injected <see cref="IMessageDeserializerService" /> that will provide message deserialization capabalities</param>
+        /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
+        /// <param name="policyConfiguration">
+        /// The optional injected and configured <see cref="IOptions{TOptions}" /> of
+        /// <see cref="RetryPolicyConfiguration" />. In case of null, using default value of
+        /// <see cref="MessageClientBaseService.retryPolicyConfiguration" />
+        /// </param>
+        public RpcClientService(IRabbitMqConnectionProvider connectionProvider, IMessageSerializerService serializerService, IMessageDeserializerService deserializerService,
+            ILogger<RpcClientService<TResponse>> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, serializerService, deserializerService, logger, policyConfiguration)
+        {
+        }
+
+        /// <summary>
+        /// Sends a request message to a RPC server and awaits for the reply from the server
+        /// </summary>
+        /// <param name="connectionName">The name of the connection to use</param>
+        /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
+        /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
+        /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
+        /// <exception cref="ArgumentNullException">
+        /// If any of <paramref name="connectionName" />,
+        /// <paramref name="rpcServerQueueName" /> or <paramref name="request" /> is not set
+        /// </exception>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(connectionName))
+            {
+                throw new ArgumentNullException(nameof(connectionName), "The connection name have to be provided");
+            }
+
+            if (string.IsNullOrWhiteSpace(rpcServerQueueName))
+            {
+                throw new ArgumentNullException(nameof(rpcServerQueueName), "The rpc server queue name have to be provided");
+            }
+
+            if (EqualityComparer<TRequest>.Default.Equals(request, default))
+            {
+                throw new ArgumentNullException(nameof(request), "The request message must not be null");
+            }
+
+            return this.SendRequestInternalAsync(connectionName, rpcServerQueueName, request, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Disposes of the even handlers
+        /// </summary>
+        /// <param name="disposing">A value indicating whether this client is disposing</param>
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+
+            if (!disposing)
+            {
+                return;
+            }
+
+            foreach (var rpcQueueDeclared in this.rpcQueueDeclareds.Values)
+            {
+                rpcQueueDeclared.ConsumerRegistrationDisposable.Dispose();
+            }
+
+            foreach (var taskCompletionSource in this.callbacks.Values)
+            {
+                taskCompletionSource.SetCanceled();
+            }
+
+            this.callbacks.Clear();
+            this.rpcQueueDeclareds.Clear();
+        }
+
+        /// <summary>
+        /// Ensures that the RPC listening queue is declared and initialized correctly to listen on response
+        /// </summary>
+        /// <param name="connectionName">The name of the connection to use</param>
+        /// <returns>An awaitable <see cref="Task{T}" /> that have the <see cref="IChannel" /> to use as response</returns>
+        private async Task<RpcQueueDeclared> EnsureRpcClientIsInitializedAsync(string connectionName)
+        {
+            if (this.rpcQueueDeclareds.TryGetValue(connectionName, out var rpcQueue))
+            {
+                return rpcQueue;
+            }
+
+            var channel = await this.GetChannelAsync(connectionName);
+            var queueDeclare = await channel.QueueDeclareAsync();
+
+            var consumer = new AsyncEventingBasicConsumer(channel);
+
+            consumer.ReceivedAsync += OnRpcResponseReceivedAsync;
+
+            var disposable = Disposable.Create(() => { consumer.ReceivedAsync -= OnRpcResponseReceivedAsync; });
+
+            var rpcQueueDeclared = new RpcQueueDeclared(channel, queueDeclare.QueueName, disposable);
+            this.rpcQueueDeclareds[connectionName] = rpcQueueDeclared;
+            await channel.BasicConsumeAsync(queueDeclare.QueueName, true, consumer);
+
+            return rpcQueueDeclared;
+
+            async Task OnRpcResponseReceivedAsync(object sender, BasicDeliverEventArgs args)
+            {
+                var correlationId = args.BasicProperties.CorrelationId;
+
+                if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
+                {
+                    var response = await this.DeserializerService.DeserializeAsync<TResponse>(args.Body.AsStream());
+                    taskCompletionSource.TrySetResult(response);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sends a request message to a RPC server and awaits for the reply from the server
+        /// </summary>
+        /// <param name="connectionName">The name of the connection to use</param>
+        /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
+        /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
+        /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json
+        /// </remarks>
+        private async Task<IObservable<TResponse>> SendRequestInternalAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        {
+            var rpcQueueDeclared = await this.EnsureRpcClientIsInitializedAsync(connectionName);
+            var correlationId = Guid.NewGuid().ToString();
+
+            var properties = new BasicProperties
+            {
+                Type = typeof(TResponse).Name,
+                ContentType = "application/json"
+            };
+
+            configureProperties?.Invoke(properties);
+            properties.CorrelationId = correlationId;
+            properties.ReplyTo = rpcQueueDeclared.QueueName;
+
+            return Observable.Create<TResponse>(async observer =>
+            {
+                try
+                {
+                    var taskCompletionSource = new TaskCompletionSource<TResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    this.callbacks.TryAdd(correlationId, taskCompletionSource);
+                    rpcQueueDeclared.Channel.CallbackExceptionAsync += ChannelOnCallbackException;
+
+                    var serializedBody = await this.SerializerService.SerializeAsync(request, cancellationToken);
+                    await rpcQueueDeclared.Channel.BasicPublishAsync(string.Empty, rpcServerQueueName, true, properties, serializedBody.ToReadOnlyMemory(), cancellationToken);
+
+                    using var cancellationTokenRegistration =
+                        cancellationToken.Register(() =>
+                        {
+                            this.callbacks.TryRemove(correlationId, out _);
+                            taskCompletionSource.SetCanceled();
+                            observer.OnError(new TimeoutException("Operation canceled"));
+                        });
+
+                    var response = await taskCompletionSource.Task;
+
+                    if (taskCompletionSource.Task.Status != TaskStatus.RanToCompletion)
+                    {
+                        if (taskCompletionSource.Task.Exception != null)
+                        {
+                            observer.OnError(taskCompletionSource.Task.Exception);
+                        }
+                        else
+                        {
+                            observer.OnError(new InvalidOperationException("Error occured during the process"));
+                        }
+                    }
+                    else
+                    {
+                        observer.OnNext(response);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    observer.OnError(exception);
+                }
+
+                var disposable = Disposable.Create(() => { rpcQueueDeclared.Channel.CallbackExceptionAsync -= ChannelOnCallbackException; });
+                return Disposable.Create(() => disposable.Dispose());
+
+                Task ChannelOnCallbackException(object sender, CallbackExceptionEventArgs args)
+                {
+                    observer.OnError(args.Exception);
+                    return Task.CompletedTask;
+                }
+            });
+        }
+
+        /// <summary>
+        /// The <see cref="RpcQueueDeclared" /> store key information about created queue to listen for RPC response
+        /// </summary>
+        private sealed class RpcQueueDeclared
+        {
+            /// <summary>Initializes a new instance of the <see cref="RpcQueueDeclared"></see> class.</summary>
+            /// <param name="channel">The <see cref="IChannel" /> to be used for communication</param>
+            /// <param name="queueName">The name of the created queue</param>
+            /// <param name="consumerRegistrationDisposable">The specific <see cref="IDisposable" /> tied to the created consumer</param>
+            public RpcQueueDeclared(IChannel channel, string queueName, IDisposable consumerRegistrationDisposable)
+            {
+                this.Channel = channel;
+                this.QueueName = queueName;
+                this.ConsumerRegistrationDisposable = consumerRegistrationDisposable;
+            }
+
+            /// <summary>
+            /// Gets dedicated <see cref="IChannel" />
+            /// </summary>
+            public IChannel Channel { get; }
+
+            /// <summary>
+            /// Gets the name of the created queue
+            /// </summary>
+            public string QueueName { get; }
+
+            /// <summary>
+            /// Gets the specific <see cref="IDisposable" /> tied to the created consumer
+            /// </summary>
+            public IDisposable ConsumerRegistrationDisposable { get; }
+        }
+    }
+}
