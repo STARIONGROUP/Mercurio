@@ -18,21 +18,17 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Tests.Messaging
+namespace Mercurio.Tests.TUnit.Messaging
 {
-    using System.Globalization;
-
     using Mercurio.Extensions;
     using Mercurio.Messaging;
-
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Logging;
-
     using RabbitMQ.Client;
+    using System.Globalization;
 
-    [TestFixture]
     [Category("Integration")]
-    [NonParallelizable]
+    [NotInParallel]
     public class RpcCommunicationTestFixture
     {
         private IRpcClientService<string> rpcClientService;
@@ -40,13 +36,13 @@ namespace Mercurio.Tests.Messaging
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
 
-        [SetUp]
-        public void Setup()
+        [Before(HookType.Test)]
+        public async Task Setup()
         {
             var serviceCollection = new ServiceCollection();
             
             serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactory(FirstConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(RpcCommunicationTestFixture.FirstConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -58,7 +54,7 @@ namespace Mercurio.Tests.Messaging
                     
                     return connectionFactory;
                 })
-                .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(RpcCommunicationTestFixture.SecondConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -78,9 +74,10 @@ namespace Mercurio.Tests.Messaging
             var serviceProvider = serviceCollection.BuildServiceProvider();
             this.rpcClientService = serviceProvider.GetRequiredService<IRpcClientService<string>>();
             this.rpcServerService = serviceProvider.GetRequiredService<IRpcServerService>();
+            await Task.CompletedTask;
         }
 
-        [TearDown]
+        [After(HookType.Test)]
         public void Teardown()
         {
             this.rpcClientService.Dispose();
@@ -91,15 +88,15 @@ namespace Mercurio.Tests.Messaging
         {
             const string listeningQueue = "rpc_request";
 
-            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync);
-            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41);
+            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(RpcCommunicationTestFixture.FirstConnectionName, listeningQueue, RpcCommunicationTestFixture.OnReceiveAsync);
+            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(RpcCommunicationTestFixture.SecondConnectionName, listeningQueue, 41);
             var taskComplettion = new TaskCompletionSource<string>();
             clientRequestObservable.Subscribe(result => taskComplettion.SetResult(result));
 
             await Task.Delay(50);
             
             await taskComplettion.Task;
-            Assert.That(taskComplettion.Task.Result, Is.EqualTo("41"));
+            await Assert.That(taskComplettion.Task.Result).IsEqualTo("41");
             disposable.Dispose();
         }
 

@@ -26,7 +26,7 @@ namespace Mercurio.Messaging
 
     using CommunityToolkit.HighPerformance;
 
-    using Mercurio.Configuration;
+    using Mercurio.Configuration.IConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
@@ -48,14 +48,9 @@ namespace Mercurio.Messaging
     public class MessageClientService : MessageClientBaseService
     {
         /// <summary>
-        /// Gets the injected <see cref="IMessageDeserializerService" /> that will provide message deserialization capabilities
+        /// Gets the injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities
         /// </summary>
-        protected readonly IMessageDeserializerService DeserializerService;
-
-        /// <summary>
-        /// Gets the injected <see cref="IMessageSerializerService" /> that will provide message serialization capabilities
-        /// </summary>
-        protected readonly IMessageSerializerService SerializerService;
+        protected readonly ISerializationProviderService serializationProviderService;
 
         /// <summary>
         /// Initializes a new instance of <see cref="MessageClientService" />
@@ -64,19 +59,12 @@ namespace Mercurio.Messaging
         /// The injected <see cref="IRabbitMqConnectionProvider" /> <see cref="IConnection" />
         /// access based on registered <see cref="ConnectionFactory" />
         /// </param>
-        /// <param name="serializerService">The injected <see cref="IMessageSerializerService" /> that will provide message serialization capabilities</param>
-        /// <param name="deserializerService">The injected <see cref="IMessageDeserializerService" /> that will provide message deserialization capabalities</param>
+        /// <param name="serializationProviderService">The injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities</param>
         /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
-        /// <param name="policyConfiguration">
-        /// The optional injected and configured <see cref="IOptions{TOptions}" /> of
-        /// <see cref="RetryPolicyConfiguration" />. In case of null, using default value of
-        /// <see cref="MessageClientBaseService.retryPolicyConfiguration" />
-        /// </param>
-        public MessageClientService(IRabbitMqConnectionProvider connectionProvider, IMessageSerializerService serializerService, IMessageDeserializerService deserializerService,
-            ILogger<MessageClientService> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, logger, policyConfiguration)
+        public MessageClientService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationProviderService,
+            ILogger<MessageClientService> logger) : base(connectionProvider, logger)
         {
-            this.SerializerService = serializerService;
-            this.DeserializerService = deserializerService;
+            this.serializationProviderService = serializationProviderService;
         }
 
         /// <summary>
@@ -205,12 +193,17 @@ namespace Mercurio.Messaging
         private async Task<IObservable<TMessage>> ListenInternalAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken)
             where TMessage : class
         {
-            var channel = await this.GetChannelAsync(connectionName, cancellationToken);
+            var channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
 
             return Observable.Create<TMessage>(async observer =>
             {
-                var disposables = await this.InitializeListenerAsync(observer, channel, exchangeConfiguration, cancellationToken);
-                return Disposable.Create(() => disposables.Dispose());
+                var disposables = await this.InitializeListenerAsync(observer, channelLease.Channel, exchangeConfiguration, cancellationToken);
+
+                return Disposable.Create(() =>
+                {
+                    disposables.Dispose();
+                    channelLease.Dispose();
+                });
             });
         }
 
@@ -224,20 +217,20 @@ namespace Mercurio.Messaging
         /// <return>A <see cref="Task" /> of <see cref="IDisposable" /></return>
         private async Task<IDisposable> AddListenerInternalAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken)
         {
-            IChannel channel = null;
             AsyncEventingBasicConsumer consumer = null;
+            ChannelLease channelLease = default;
 
             try
             {
-                channel = await this.GetChannelAsync(connectionName, cancellationToken);
+                channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
 
-                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channel, false);
+                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channelLease.Channel, false);
 
-                consumer = new AsyncEventingBasicConsumer(channel);
+                consumer = new AsyncEventingBasicConsumer(channelLease.Channel);
                 consumer.ReceivedAsync += onReceiveAsync;
                 consumer.ReceivedAsync += OnMessageReceiveAsync;
 
-                await channel.BasicConsumeAsync(exchangeConfiguration.QueueName, true, consumer, cancellationToken);
+                await channelLease.Channel.BasicConsumeAsync(exchangeConfiguration.QueueName, true, consumer, cancellationToken);
             }
             catch (TimeoutException)
             {
@@ -256,7 +249,7 @@ namespace Mercurio.Messaging
                     consumer.ReceivedAsync -= OnMessageReceiveAsync;
                 }
 
-                channel?.Dispose();
+                channelLease.Dispose();
             });
 
             Task OnMessageReceiveAsync(object _, BasicDeliverEventArgs m)
@@ -308,20 +301,20 @@ namespace Mercurio.Messaging
         {
             try
             {
-                var channel = await this.GetChannelAsync(connectionName, cancellationToken);
-                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channel, true);
+                await using var channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
+                await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channelLease.Channel, true);
 
                 var properties = new BasicProperties
                 {
                     Type = typeof(TMessage).Name,
                     DeliveryMode = DeliveryModes.Persistent,
-                    ContentType = "application/json"
+                    ContentType = this.serializationProviderService.DefaultFormat.ToContentType(),
                 };
 
                 configureProperties?.Invoke(properties);
                 this.OnPrePush(message, properties, exchangeConfiguration);
 
-                var stream = await this.SerializerService.SerializeAsync(message, cancellationToken);
+                var stream = await this.serializationProviderService.ResolveSerializer().SerializeAsync(message, cancellationToken);
 
                 var routingKey = !string.IsNullOrEmpty(exchangeConfiguration.RoutingKey) || !string.IsNullOrEmpty(exchangeConfiguration.ExchangeName)
                     ? exchangeConfiguration.RoutingKey
@@ -329,7 +322,7 @@ namespace Mercurio.Messaging
 
                 var body = stream.ToReadOnlyMemory();
                 
-                await channel.BasicPublishAsync(exchangeConfiguration.PushExchangeName,
+                await channelLease.Channel.BasicPublishAsync(exchangeConfiguration.PushExchangeName,
                     routingKey, false, properties,
                     body, cancellationToken);
 
@@ -390,7 +383,7 @@ namespace Mercurio.Messaging
             {
                 this.OnMessageReceive(message, exchangeConfiguration);
                 using var stream = message.Body.AsStream();
-                var content = await this.DeserializerService.DeserializeAsync<TMessage>(stream, cancellationToken);
+                var content = await this.serializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType.ToSupportedSerializationFormat()).DeserializeAsync<TMessage>(stream, cancellationToken);
                 observer.OnNext(content);
                 await Task.CompletedTask;
             }

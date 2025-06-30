@@ -26,9 +26,9 @@ namespace Mercurio.Messaging
     using RabbitMQ.Client.Events;
 
     /// <summary>
-    /// The <see cref="IMessageClientBaseService" /> is the base interface definition for any implemention of a RabbitMQ message client service.
+    /// The <see cref="IMessageClientService" /> is the base interface definition for any implemention of a RabbitMQ message client service.
     /// </summary>
-    public interface IMessageClientBaseService : IDisposable
+    public interface IMessageClientService : IDisposable
     {
         /// <summary>
         /// Listens for messages of type <typeparamref name="TMessage" /> on the specified queue.

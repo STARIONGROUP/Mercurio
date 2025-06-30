@@ -20,7 +20,7 @@
 
 namespace Mercurio.Extensions
 {
-    using Mercurio.Configuration;
+    using Mercurio.Configuration.IConfiguration;
     using Mercurio.Provider;
     using Mercurio.Serializer;
 
@@ -67,19 +67,6 @@ namespace Mercurio.Extensions
         public static IServiceCollection WithRabbitMqConnectionFactory(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, ConnectionFactory> factory)
         {
             serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, sp => Task.FromResult(factory(sp))));
-            return serviceCollection;
-        }
-
-        /// <summary>
-        /// Registers default <see cref="JsonMessageSerializerService"/> into the <see cref="IServiceCollection"/>
-        /// </summary>
-        /// <param name="serviceCollection">The <see cref="IServiceCollection" /> that will be used to build the <see cref="IServiceProvider"/></param>
-        /// <returns>The <see cref="IServiceCollection"/></returns>
-        public static IServiceCollection WithDefaultJsonMessageSerializer(this IServiceCollection serviceCollection)
-        {
-            var jsonMessageSerializerServiceInstance = new JsonMessageSerializerService();
-            serviceCollection.AddSingleton<IMessageSerializerService>(jsonMessageSerializerServiceInstance);
-            serviceCollection.AddSingleton<IMessageDeserializerService>(jsonMessageSerializerServiceInstance);
             return serviceCollection;
         }
     }

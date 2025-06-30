@@ -20,20 +20,31 @@
 
 namespace Mercurio.Provider
 {
+    using Mercurio.Messaging;
+
     using RabbitMQ.Client;
 
     /// <summary>
     /// The <see cref="IRabbitMqConnectionProvider" /> provides <see cref="IConnection" /> instance based on registered
     /// <see cref="Func{TResult}" /> for <see cref="ConnectionFactory" />
     /// </summary>
-    public interface IRabbitMqConnectionProvider
+    public interface IRabbitMqConnectionProvider : ICanReleaseChannel
     {
         /// <summary>
         /// Gets an <see cref="IConnection" /> from a name-based registration of <see cref="ConnectionFactory" />
         /// </summary>
         /// <param name="connectionName">The name of the registered connection</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/></param>
         /// <returns>An awaitable <see cref="Task{TResult}" /> that provides access to an <see cref="IConnection" /></returns>
-        Task<IConnection> GetConnectionAsync(string connectionName);
+        Task<IConnection> GetConnectionAsync(string connectionName, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Asynchronously leases a channel from the pool or creates one if necessary.
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/></param>
+        /// <returns>A <see cref="ValueTask{TResult}"/> of <see cref="ChannelLease"/></returns>
+        ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Register a new <see cref="ConnectionFactory" /> that could be resolved to provide an <see cref="IConnection" />

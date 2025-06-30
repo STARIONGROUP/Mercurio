@@ -28,14 +28,16 @@ namespace Mercurio.Tests.Messaging
     using Microsoft.Extensions.Logging;
 
     using RabbitMQ.Client;
-    
+
+    using System.Collections.Concurrent;
+
     [TestFixture]
     [Category("Integration")]
     [NonParallelizable]
     public class MessageClientServiceTestFixture
     {
-        private IMessageClientBaseService firstService;
-        private IMessageClientBaseService secondService;
+        private IMessageClientService firstService;
+        private IMessageClientService secondService;
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
         private const string FirstSentMessage = "Hello World!";
@@ -67,18 +69,18 @@ namespace Mercurio.Tests.Messaging
                         HostName = "localhost",
                         Port = 5672,
                         UserName = "guest",
-                        Password = "guest"
+                        Password = "guest",
                     };
-                    
+
                     return connectionFactory;
                 })
-                .WithDefaultJsonMessageSerializer()
+                .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
-            serviceCollection.AddTransient<IMessageClientBaseService, MessageClientService>();
+            serviceCollection.AddTransient<IMessageClientService, MessageClientService>();
             var serviceProvider = serviceCollection.BuildServiceProvider();
-            this.firstService = serviceProvider.GetRequiredService<IMessageClientBaseService>();
-            this.secondService = serviceProvider.GetRequiredService<IMessageClientBaseService>();
+            this.firstService = serviceProvider.GetRequiredService<IMessageClientService>();
+            this.secondService = serviceProvider.GetRequiredService<IMessageClientService>();
         }
 
         [TearDown]
@@ -115,7 +117,58 @@ namespace Mercurio.Tests.Messaging
                 tasks.Remove(completedTask);
             }
         }
-  
+
+        [Test]
+        [TestCase(20, 5, 10)]
+        public async Task Should_ReUse_Channel_Under_Stress(int listenerCount = 20, int producerCount = 5, int pushRepetitions = 10)
+        {
+            const string exchangeName = "PoolReuseExchange";
+            const string routingKey = "";
+            const string message = "stress-message";
+
+            var receivedMessages = new ConcurrentBag<string>();
+            var completionSources = new List<TaskCompletionSource<string>>();
+
+            var disposables = new List<IDisposable>();
+
+            for (int i = 0; i < listenerCount; i++)
+            {
+                var taskCompletionSource = new TaskCompletionSource<string>();
+                completionSources.Add(taskCompletionSource);
+
+                var observable = await this.firstService.ListenAsync<string>(FirstConnectionName, new FanoutExchangeConfiguration(exchangeName, routingKey));
+
+                disposables.Add(observable.Subscribe(m =>
+                {
+                    receivedMessages.Add(m);
+                    taskCompletionSource.TrySetResult(m);
+                }));
+            }
+
+            await Task.Delay(100);
+
+            var producers = Enumerable.Range(0, producerCount).Select(async _ =>
+            {
+                for (int i = 0; i < pushRepetitions; i++)
+                {
+                    await this.firstService.PushAsync(FirstConnectionName, message, new FanoutExchangeConfiguration(exchangeName, routingKey));
+                }
+            });
+
+            await Task.WhenAll(producers);
+
+            foreach (var taskCompletionSource in completionSources)
+            {
+                var result = await Task.WhenAny(taskCompletionSource.Task, Task.Delay(2000));
+                Assert.That(result == taskCompletionSource.Task, "Expected listener did not receive message in time.");
+                Assert.That(taskCompletionSource.Task.Result, Is.EqualTo(message));
+            }
+
+            Assert.That(receivedMessages, Has.Count.GreaterThanOrEqualTo(listenerCount), "Not all listeners received at least one message.");
+
+            disposables.ForEach(d => d.Dispose());
+        }
+
         [Test]
         [TestCase("DirectChannel", "", "")]
         [TestCase("DirectChannelWithExchange", "CustomNewExchange", "")]
