@@ -34,6 +34,7 @@ namespace Mercurio.Tests.TUnit.Messaging
     {
         private IMessageClientService firstService;
         private IMessageClientService secondService;
+        private ServiceProvider serviceProvider;
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
         private const string FirstSentMessage = "Hello World!";
@@ -46,7 +47,7 @@ namespace Mercurio.Tests.TUnit.Messaging
             var serviceCollection = new ServiceCollection();
             
             serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactory(MessageClientServiceTestFixture.FirstConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(FirstConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -58,7 +59,7 @@ namespace Mercurio.Tests.TUnit.Messaging
                     
                     return connectionFactory;
                 })
-                .WithRabbitMqConnectionFactory(MessageClientServiceTestFixture.SecondConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -74,9 +75,9 @@ namespace Mercurio.Tests.TUnit.Messaging
                 .AddLogging(x => x.AddConsole());
 
             serviceCollection.AddTransient<IMessageClientService, MessageClientService>();
-            var serviceProvider = serviceCollection.BuildServiceProvider();
-            this.firstService = serviceProvider.GetRequiredService<IMessageClientService>();
-            this.secondService = serviceProvider.GetRequiredService<IMessageClientService>();
+            this.serviceProvider = serviceCollection.BuildServiceProvider();
+            this.firstService = this.serviceProvider.GetRequiredService<IMessageClientService>();
+            this.secondService = this.serviceProvider.GetRequiredService<IMessageClientService>();
             
             await Task.CompletedTask;
         }
@@ -86,6 +87,7 @@ namespace Mercurio.Tests.TUnit.Messaging
         {
             this.firstService.Dispose();
             this.secondService.Dispose();
+            await this.serviceProvider.DisposeAsync();
             await Task.CompletedTask;
         }
 
@@ -192,7 +194,6 @@ namespace Mercurio.Tests.TUnit.Messaging
         public async Task Should_ReUse_Channel_Under_Stress(int listenerCount = 20, int producerCount = 5, int pushRepetitions = 10)
         {
             const string exchangeName = "PoolReuseExchange";
-            const string routingKey = "";
             const string message = "stress-message";
 
             var receivedMessages = new ConcurrentBag<string>();
@@ -200,12 +201,12 @@ namespace Mercurio.Tests.TUnit.Messaging
 
             var disposables = new List<IDisposable>();
 
-            for (int i = 0; i < listenerCount; i++)
+            for (var listenerIndex = 0; listenerIndex < listenerCount; listenerIndex++)
             {
                 var taskCompletionSource = new TaskCompletionSource<string>();
                 completionSources.Add(taskCompletionSource);
 
-                var observable = await this.firstService.ListenAsync<string>(MessageClientServiceTestFixture.FirstConnectionName, new FanoutExchangeConfiguration(exchangeName, routingKey));
+                var observable = await this.firstService.ListenAsync<string>(FirstConnectionName, new FanoutExchangeConfiguration(exchangeName));
 
                 disposables.Add(observable.Subscribe(m =>
                 {
@@ -218,9 +219,9 @@ namespace Mercurio.Tests.TUnit.Messaging
 
             var producers = Enumerable.Range(0, producerCount).Select(async _ =>
             {
-                for (int i = 0; i < pushRepetitions; i++)
+                for (var pushIndex = 0; pushIndex < pushRepetitions; pushIndex++)
                 {
-                    await this.firstService.PushAsync(MessageClientServiceTestFixture.FirstConnectionName, message, new FanoutExchangeConfiguration(exchangeName, routingKey));
+                    await this.firstService.PushAsync(FirstConnectionName, message, new FanoutExchangeConfiguration(exchangeName));
                 }
             });
 

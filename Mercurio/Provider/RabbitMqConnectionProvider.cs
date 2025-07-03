@@ -127,12 +127,18 @@ namespace Mercurio.Provider
                     existingConnection.Value.Dispose();
                 }
 
-                foreach (var channel in this.channelPool[existingConnection.Key])
+                if (this.channelPool.TryGetValue(existingConnection.Key, out var disposablePool))
                 {
-                    channel.Dispose();
+                    foreach (var channel in disposablePool)
+                    {
+                        channel.Dispose();
+                    }    
                 }
 
-                this.poolGates[existingConnection.Key].Dispose();
+                if (this.poolGates.TryGetValue(existingConnection.Key, out var poolGate))
+                {
+                    poolGate.Dispose();
+                }
             }
 
             this.connections.Clear();

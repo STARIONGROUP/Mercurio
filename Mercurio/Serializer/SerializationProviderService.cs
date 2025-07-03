@@ -29,9 +29,13 @@ namespace Mercurio.Serializer
     internal sealed class SerializationProviderService : ISerializationProviderService
     {
         /// <summary>
-        /// 
+        /// Gets the Dictionary of <see cref="string"/> to <see cref="IMessageSerializerService"/> instances
         /// </summary>
         private readonly IDictionary<string, IMessageSerializerService> serializers;
+        
+        /// <summary>
+        /// Gets the Dictionary of <see cref="string"/> to <see cref="IMessageDeserializerService"/> instances
+        /// </summary>
         private readonly IDictionary<string, IMessageDeserializerService> deserializers;
 
         /// <summary>

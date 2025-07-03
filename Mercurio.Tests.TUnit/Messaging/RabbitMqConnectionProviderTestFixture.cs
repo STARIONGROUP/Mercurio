@@ -44,11 +44,11 @@ namespace Mercurio.Tests.TUnit.Messaging
 
             this.connection = new Mock<IConnection>();
             this.connection.Setup(c => c.IsOpen).Returns(true);
-            this.connection.SetupGet(c => c.ClientProvidedName).Returns(RabbitMqConnectionProviderTestFixture.ConnectionName);
+            this.connection.SetupGet(c => c.ClientProvidedName).Returns(ConnectionName);
             this.connection.Setup(c => c.CreateChannelAsync(It.IsAny<CreateChannelOptions>(), It.IsAny<CancellationToken>())).ReturnsAsync(this.channel.Object);
 
             var mockConfig = new Mock<IConnectionFactoryConfiguration>();
-            mockConfig.SetupGet(c => c.ConnectionName).Returns(RabbitMqConnectionProviderTestFixture.ConnectionName);
+            mockConfig.SetupGet(c => c.ConnectionName).Returns(ConnectionName);
             mockConfig.SetupGet(c => c.PoolSize).Returns(10);
 
             mockConfig.SetupGet(c => c.ConnectionFactory).Returns(_ => Task.FromResult(new ConnectionFactory()));
@@ -69,11 +69,11 @@ namespace Mercurio.Tests.TUnit.Messaging
         [Test]
         public async Task Should_Create_And_Cache_Connection_And_Channel()
         {
-            var oldLeaseChannel = default(IChannel);
+            IChannel oldLeaseChannel;
 
             using var _ = Assert.Multiple();
 
-            using (var lease = await this.service.LeaseChannelAsync(RabbitMqConnectionProviderTestFixture.ConnectionName))
+            await using (var lease = await this.service.LeaseChannelAsync(ConnectionName))
             {
                 oldLeaseChannel = lease.Channel;
                 
@@ -82,7 +82,7 @@ namespace Mercurio.Tests.TUnit.Messaging
                 await Assert.That(lease.Channel.IsOpen).IsTrue();
             }
 
-            await using var newLease = await this.service.LeaseChannelAsync(RabbitMqConnectionProviderTestFixture.ConnectionName);
+            await using var newLease = await this.service.LeaseChannelAsync(ConnectionName);
             await Assert.That(() => oldLeaseChannel).IsSameReferenceAs(newLease.Channel);
             await Assert.That(newLease.Channel.IsOpen).IsTrue();
         }

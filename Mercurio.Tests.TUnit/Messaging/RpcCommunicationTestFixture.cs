@@ -20,29 +20,33 @@
 
 namespace Mercurio.Tests.TUnit.Messaging
 {
+    using System.Globalization;
+
     using Mercurio.Extensions;
     using Mercurio.Messaging;
+
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Logging;
+
     using RabbitMQ.Client;
-    using System.Globalization;
 
     [Category("Integration")]
     [NotInParallel]
     public class RpcCommunicationTestFixture
     {
-        private IRpcClientService<string> rpcClientService;
-        private IRpcServerService rpcServerService;
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
+        private IRpcClientService<string> rpcClientService;
+        private IRpcServerService rpcServerService;
+        private ServiceProvider serviceProvider;
 
-        [Before(HookType.Test)]
+        [Before(Test)]
         public async Task Setup()
         {
             var serviceCollection = new ServiceCollection();
-            
+
             serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactory(RpcCommunicationTestFixture.FirstConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(FirstConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -51,10 +55,10 @@ namespace Mercurio.Tests.TUnit.Messaging
                         UserName = "guest",
                         Password = "guest"
                     };
-                    
+
                     return connectionFactory;
                 })
-                .WithRabbitMqConnectionFactory(RpcCommunicationTestFixture.SecondConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(SecondConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -63,24 +67,25 @@ namespace Mercurio.Tests.TUnit.Messaging
                         UserName = "guest",
                         Password = "guest"
                     };
-                    
+
                     return connectionFactory;
                 })
                 .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
-            serviceCollection.AddTransient<IRpcServerService,RpcServerService>();
+            serviceCollection.AddTransient<IRpcServerService, RpcServerService>();
             serviceCollection.AddTransient<IRpcClientService<string>, RpcClientService<string>>();
-            var serviceProvider = serviceCollection.BuildServiceProvider();
-            this.rpcClientService = serviceProvider.GetRequiredService<IRpcClientService<string>>();
-            this.rpcServerService = serviceProvider.GetRequiredService<IRpcServerService>();
+            this.serviceProvider = serviceCollection.BuildServiceProvider();
+            this.rpcClientService = this.serviceProvider.GetRequiredService<IRpcClientService<string>>();
+            this.rpcServerService = this.serviceProvider.GetRequiredService<IRpcServerService>();
             await Task.CompletedTask;
         }
 
-        [After(HookType.Test)]
+        [After(Test)]
         public void Teardown()
         {
             this.rpcClientService.Dispose();
+            this.serviceProvider.Dispose();
         }
 
         [Test]
@@ -88,13 +93,13 @@ namespace Mercurio.Tests.TUnit.Messaging
         {
             const string listeningQueue = "rpc_request";
 
-            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(RpcCommunicationTestFixture.FirstConnectionName, listeningQueue, RpcCommunicationTestFixture.OnReceiveAsync);
-            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(RpcCommunicationTestFixture.SecondConnectionName, listeningQueue, 41);
+            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync);
+            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41);
             var taskComplettion = new TaskCompletionSource<string>();
             clientRequestObservable.Subscribe(result => taskComplettion.SetResult(result));
 
             await Task.Delay(50);
-            
+
             await taskComplettion.Task;
             await Assert.That(taskComplettion.Task.Result).IsEqualTo("41");
             disposable.Dispose();

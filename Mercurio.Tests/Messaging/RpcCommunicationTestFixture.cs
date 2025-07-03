@@ -37,6 +37,7 @@ namespace Mercurio.Tests.Messaging
     {
         private IRpcClientService<string> rpcClientService;
         private IRpcServerService rpcServerService;
+        private ServiceProvider serviceProvider;
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
 
@@ -75,15 +76,16 @@ namespace Mercurio.Tests.Messaging
 
             serviceCollection.AddTransient<IRpcServerService,RpcServerService>();
             serviceCollection.AddTransient<IRpcClientService<string>, RpcClientService<string>>();
-            var serviceProvider = serviceCollection.BuildServiceProvider();
-            this.rpcClientService = serviceProvider.GetRequiredService<IRpcClientService<string>>();
-            this.rpcServerService = serviceProvider.GetRequiredService<IRpcServerService>();
+            this.serviceProvider = serviceCollection.BuildServiceProvider();
+            this.rpcClientService = this.serviceProvider.GetRequiredService<IRpcClientService<string>>();
+            this.rpcServerService = this.serviceProvider.GetRequiredService<IRpcServerService>();
         }
 
         [TearDown]
         public void Teardown()
         {
             this.rpcClientService.Dispose();
+            this.serviceProvider.Dispose();
         }
 
         [Test]

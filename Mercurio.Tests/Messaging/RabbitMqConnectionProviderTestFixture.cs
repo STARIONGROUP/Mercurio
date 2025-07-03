@@ -23,7 +23,6 @@ namespace Mercurio.Tests.Messaging
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Provider;
 
-    using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
 
     using Moq;
@@ -32,10 +31,10 @@ namespace Mercurio.Tests.Messaging
 
     public class RabbitMqConnectionProviderTestFixture
     {
-        private RabbitMqConnectionProvider service;
-        private Mock<IConnection> connection;
-        private Mock<IChannel> channel;
         private const string ConnectionName = "TestConnection";
+        private Mock<IChannel> channel;
+        private Mock<IConnection> connection;
+        private RabbitMqConnectionProvider service;
 
         [SetUp]
         public async Task Setup()
@@ -48,16 +47,18 @@ namespace Mercurio.Tests.Messaging
             this.connection = new Mock<IConnection>();
             this.connection.Setup(c => c.IsOpen).Returns(true);
             this.connection.SetupGet(c => c.ClientProvidedName).Returns(ConnectionName);
+
             this.connection.Setup(c => c.CreateChannelAsync(It.IsAny<CreateChannelOptions>(), It.IsAny<CancellationToken>()))
-                           .ReturnsAsync(channel.Object);
+                .ReturnsAsync(this.channel.Object);
 
             var mockConfig = new Mock<IConnectionFactoryConfiguration>();
             mockConfig.Setup(c => c.ConnectionName).Returns(ConnectionName);
             mockConfig.Setup(c => c.PoolSize).Returns(10);
-            mockConfig.Setup(c => c.ConnectionFactory)
-                      .Returns(_ => Task.FromResult(new ConnectionFactory()));
 
-            this.service = new RabbitMqConnectionProvider(null, mockServiceProvider.Object, new[] { mockConfig.Object },
+            mockConfig.Setup(c => c.ConnectionFactory)
+                .Returns(_ => Task.FromResult(new ConnectionFactory()));
+
+            this.service = new RabbitMqConnectionProvider(null, mockServiceProvider.Object, [mockConfig.Object],
                 Options.Create(new RetryPolicyConfiguration { MaxConnectionRetryAttempts = 1 }));
 
             await Task.CompletedTask;
@@ -73,9 +74,9 @@ namespace Mercurio.Tests.Messaging
         [Test]
         public async Task Should_Create_And_Cache_Connection_And_Channel()
         {
-            var oldLeaseChannel = default(IChannel);
+            IChannel oldLeaseChannel;
 
-            using (var lease = await this.service.LeaseChannelAsync(ConnectionName))
+            await using (var lease = await this.service.LeaseChannelAsync(ConnectionName))
             {
                 oldLeaseChannel = lease.Channel;
 
@@ -95,10 +96,7 @@ namespace Mercurio.Tests.Messaging
         [Test]
         public void Should_Throw_When_Connection_Not_Registered()
         {
-            Assert.ThrowsAsync<ArgumentException>(async () =>
-            {
-                await this.service.GetConnectionAsync("Unregistered");
-            });
+            Assert.ThrowsAsync<ArgumentException>(async () => { await this.service.GetConnectionAsync("Unregistered"); });
         }
     }
 }
