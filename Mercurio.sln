@@ -12,8 +12,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio", "Mercurio\Mercur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Tests", "Mercurio.Tests\Mercurio.Tests.csproj", "{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Tests.TUnit", "Mercurio.Tests.TUnit\Mercurio.Tests.TUnit.csproj", "{458EF32A-066A-43C0-BF1D-4D54BEE34C78}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,10 +26,6 @@ Global
 		{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}.Release|Any CPU.Build.0 = Release|Any CPU
-		{458EF32A-066A-43C0-BF1D-4D54BEE34C78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{458EF32A-066A-43C0-BF1D-4D54BEE34C78}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{458EF32A-066A-43C0-BF1D-4D54BEE34C78}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{458EF32A-066A-43C0-BF1D-4D54BEE34C78}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
