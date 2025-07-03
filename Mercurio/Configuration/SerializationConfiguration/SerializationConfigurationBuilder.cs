@@ -33,14 +33,14 @@ namespace Mercurio.Configuration.SerializationConfiguration
     internal class SerializationConfigurationBuilder : ISerializationConfigurationBuilder
     {
         /// <summary>
-        /// The default serialization format to use when no specific format is requested. Defaults to <see cref="SupportedSerializationFormat.Json"/>.
+        /// The default serialization format to use when no specific format is requested. Defaults to <see cref="SupportedSerializationFormat.JsonFormat"/>.
         /// </summary>
-        private SupportedSerializationFormat defaultFormat = SupportedSerializationFormat.Json;
+        private string defaultFormat = SupportedSerializationFormat.JsonFormat;
 
         /// <summary>
         /// Gets the collection of supported serialization formats that have been registered.
         /// </summary>
-        private HashSet<SupportedSerializationFormat> supportedSerializationFormats { get; } = [];
+        private HashSet<string> SupportedSerializationFormats { get; } = [];
 
         /// <summary>
         /// Gets the list of registration delegates to apply to the <see cref="IServiceCollection"/>.
@@ -50,7 +50,10 @@ namespace Mercurio.Configuration.SerializationConfiguration
         /// <summary>
         /// Registers the default JSON serialization service.
         /// </summary>
-        public ISerializationConfigurationBuilder UseDefaultJson() => this.UseJson<JsonMessageSerializerService>();
+        public ISerializationConfigurationBuilder UseDefaultJson()
+        {
+            return this.UseJson<JsonMessageSerializerService>();   
+        }
 
         /// <summary>
         /// Registers a keyed JSON serialization/deserialization service.
@@ -59,14 +62,14 @@ namespace Mercurio.Configuration.SerializationConfiguration
         public ISerializationConfigurationBuilder UseJson<TSerializationService>()
             where TSerializationService : class, IMessageSerializerService, IMessageDeserializerService
         {
-            this.supportedSerializationFormats.Add(SupportedSerializationFormat.Json);
+            this.SupportedSerializationFormats.Add(SupportedSerializationFormat.JsonFormat);
 
             this.AddAsDefault<TSerializationService>();
 
             this.Registrations.Add(services => services
-                .AddKeyedSingleton<TSerializationService, TSerializationService>(SupportedSerializationFormat.Json)
-                .AddKeyedSingleton<IMessageSerializerService, TSerializationService>(SupportedSerializationFormat.Json)
-                .AddKeyedSingleton<IMessageDeserializerService, TSerializationService>(SupportedSerializationFormat.Json));
+                .AddKeyedSingleton<TSerializationService, TSerializationService>(SupportedSerializationFormat.JsonFormat)
+                .AddKeyedSingleton<IMessageSerializerService, TSerializationService>(SupportedSerializationFormat.JsonFormat)
+                .AddKeyedSingleton<IMessageDeserializerService, TSerializationService>(SupportedSerializationFormat.JsonFormat));
 
             return this;
         }
@@ -79,17 +82,17 @@ namespace Mercurio.Configuration.SerializationConfiguration
         public ISerializationConfigurationBuilder UseMessagePack<TSerializationService>(bool asDefault = true)
             where TSerializationService : class, IMessageSerializerService, IMessageDeserializerService
         {
-            this.supportedSerializationFormats.Add(SupportedSerializationFormat.MessagePack);
+            this.SupportedSerializationFormats.Add(SupportedSerializationFormat.MessagePackFormat);
 
             if (asDefault)
             {
-                this.AddAsDefault<TSerializationService>(SupportedSerializationFormat.MessagePack);
+                this.AddAsDefault<TSerializationService>(SupportedSerializationFormat.MessagePackFormat);
             }
 
             this.Registrations.Add(services => services
-                .AddKeyedSingleton<TSerializationService, TSerializationService>(SupportedSerializationFormat.MessagePack)
-                .AddKeyedSingleton<IMessageSerializerService, TSerializationService>(SupportedSerializationFormat.MessagePack)
-                .AddKeyedSingleton<IMessageDeserializerService, TSerializationService>(SupportedSerializationFormat.MessagePack));
+                .AddKeyedSingleton<TSerializationService, TSerializationService>(SupportedSerializationFormat.MessagePackFormat)
+                .AddKeyedSingleton<IMessageSerializerService, TSerializationService>(SupportedSerializationFormat.MessagePackFormat)
+                .AddKeyedSingleton<IMessageDeserializerService, TSerializationService>(SupportedSerializationFormat.MessagePackFormat));
 
             return this;
         }
@@ -102,10 +105,10 @@ namespace Mercurio.Configuration.SerializationConfiguration
         /// <typeparam name="TSerializationService">
         /// The service type implementing both <see cref="IMessageSerializerService"/> and <see cref="IMessageDeserializerService"/>.
         /// </typeparam>
-        /// <param name="defaultFormat">The default <see cref="SupportedSerializationFormat"/></param>
-        private void AddAsDefault<TSerializationService>(SupportedSerializationFormat defaultFormat = SupportedSerializationFormat.Json) where TSerializationService : class, IMessageSerializerService, IMessageDeserializerService
+        /// <param name="defaultSupportedFormat">The default supported format value</param>
+        private void AddAsDefault<TSerializationService>(string defaultSupportedFormat = SupportedSerializationFormat.JsonFormat) where TSerializationService : class, IMessageSerializerService, IMessageDeserializerService
         {
-            if(defaultFormat != SupportedSerializationFormat.MessagePack && this.supportedSerializationFormats.Any(x => x == SupportedSerializationFormat.Unspecified))
+            if(defaultSupportedFormat != SupportedSerializationFormat.MessagePackFormat && this.SupportedSerializationFormats.Any(x => x == SupportedSerializationFormat.Unspecified))
             {
                 return;
             }
@@ -114,9 +117,9 @@ namespace Mercurio.Configuration.SerializationConfiguration
                 .AddKeyedSingleton<IMessageSerializerService, TSerializationService>(SupportedSerializationFormat.Unspecified)
                 .AddKeyedSingleton<IMessageDeserializerService, TSerializationService>(SupportedSerializationFormat.Unspecified));
 
-            this.supportedSerializationFormats.Add(SupportedSerializationFormat.Unspecified);
+            this.SupportedSerializationFormats.Add(SupportedSerializationFormat.Unspecified);
 
-            this.defaultFormat = defaultFormat;
+            this.defaultFormat = defaultSupportedFormat;
         }
 
         /// <summary>
@@ -136,13 +139,13 @@ namespace Mercurio.Configuration.SerializationConfiguration
                 registration(services);
             }
 
-            services.AddSingleton<IDictionary<SupportedSerializationFormat, IMessageDeserializerService>>(provider => this.supportedSerializationFormats.ToDictionary(x => x, x => provider.GetRequiredKeyedService<IMessageDeserializerService>(x)));
-            services.AddSingleton<IDictionary<SupportedSerializationFormat, IMessageSerializerService>>(provider => this.supportedSerializationFormats.ToDictionary(x => x, x => provider.GetRequiredKeyedService<IMessageSerializerService>(x)));
+            services.AddSingleton<IDictionary<string, IMessageDeserializerService>>(provider => this.SupportedSerializationFormats.ToDictionary(x => x, provider.GetRequiredKeyedService<IMessageDeserializerService>));
+            services.AddSingleton<IDictionary<string, IMessageSerializerService>>(provider => this.SupportedSerializationFormats.ToDictionary(x => x, provider.GetRequiredKeyedService<IMessageSerializerService>));
 
             services.AddSingleton<ISerializationProviderService>(provider =>
             {
-                var serializers = provider.GetRequiredService<IDictionary<SupportedSerializationFormat, IMessageSerializerService>>();
-                var deserializers = provider.GetRequiredService<IDictionary<SupportedSerializationFormat, IMessageDeserializerService>>();
+                var serializers = provider.GetRequiredService<IDictionary<string, IMessageSerializerService>>();
+                var deserializers = provider.GetRequiredService<IDictionary<string, IMessageDeserializerService>>();
                 return new SerializationProviderService(serializers, deserializers, this.defaultFormat);
             });
 

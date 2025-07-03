@@ -18,17 +18,20 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
+using ThrowsExtensions = TUnit.Assertions.AssertConditions.Throws.ThrowsExtensions;
+
 namespace Mercurio.Tests.TUnit.Extensions
 {
-    using global::TUnit.Assertions.AssertConditions.Throws;
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Configuration.SerializationConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Messaging;
     using Mercurio.Provider;
     using Mercurio.Serializer;
+
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Options;
+
     using RabbitMQ.Client;
     using RabbitMQ.Client.Exceptions;
 
@@ -36,7 +39,7 @@ namespace Mercurio.Tests.TUnit.Extensions
     {
         private IServiceCollection serviceCollection;
 
-        [Before(HookType.Test)]
+        [Before(Test)]
         public async Task Setup()
         {
             this.serviceCollection = new ServiceCollection();
@@ -50,39 +53,41 @@ namespace Mercurio.Tests.TUnit.Extensions
             this.serviceCollection.AddRabbitMqConnectionProvider()
                 .WithRabbitMqConnectionFactoryAsync("Primary", _ =>
                 {
-                    var connectionFactory = new ConnectionFactory()
+                    var connectionFactory = new ConnectionFactory
                     {
                         HostName = "localhost",
                         Port = 5432
                     };
+
                     return Task.FromResult(connectionFactory);
                 })
                 .WithRabbitMqConnectionFactory("Secondary", _ =>
                 {
-                    var connectionFactory = new ConnectionFactory()
+                    var connectionFactory = new ConnectionFactory
                     {
                         HostName = "localhost",
                         Port = 5433
                     };
+
                     return connectionFactory;
                 })
                 .WithSerialization(x => x.UseJson<NewtonSoftSerializer>()
-                                         .UseMessagePack<MessagePackSerializer>(true));
+                    .UseMessagePack<MessagePackSerializer>());
 
             this.serviceCollection.AddTransient<IMessageClientService, MessageClientService>();
 
             var serviceProvider = this.serviceCollection.BuildServiceProvider();
 
             using var _ = Assert.Multiple();
-            var deserializers = serviceProvider.GetService<IDictionary<SupportedSerializationFormat, IMessageDeserializerService>>();
-            
+            var deserializers = serviceProvider.GetService<IDictionary<string, IMessageDeserializerService>>();
+
             await Assert.That(serviceProvider.GetKeyedService<IMessageSerializerService>(SupportedSerializationFormat.Unspecified)).IsTypeOf<MessagePackSerializer>();
             await Assert.That(deserializers).HasCount(3);
-            await Assert.That(serviceProvider.GetKeyedService<MessagePackSerializer>(SupportedSerializationFormat.MessagePack)).IsNotNull();
-            await Assert.That(serviceProvider.GetKeyedService<NewtonSoftSerializer>(SupportedSerializationFormat.Json)).IsNotNull();
+            await Assert.That(serviceProvider.GetKeyedService<MessagePackSerializer>(SupportedSerializationFormat.MessagePackFormat)).IsNotNull();
+            await Assert.That(serviceProvider.GetKeyedService<NewtonSoftSerializer>(SupportedSerializationFormat.JsonFormat)).IsNotNull();
             await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>()).IsNotNull();
-            await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(SupportedSerializationFormat.Json)).IsTypeOf<NewtonSoftSerializer>();
-            await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer("application/json".ToSupportedSerializationFormat())).IsTypeOf<NewtonSoftSerializer>();
+            await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(SupportedSerializationFormat.JsonFormat)).IsTypeOf<NewtonSoftSerializer>();
+            await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer("application/json")).IsTypeOf<NewtonSoftSerializer>();
             await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveSerializer()).IsTypeOf<MessagePackSerializer>();
             await Assert.That(serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer()).IsTypeOf<MessagePackSerializer>();
         }
@@ -93,7 +98,7 @@ namespace Mercurio.Tests.TUnit.Extensions
             this.serviceCollection.AddRabbitMqConnectionProvider()
                 .WithRabbitMqConnectionFactoryAsync("Primary", _ =>
                 {
-                    var connectionFactory = new ConnectionFactory()
+                    var connectionFactory = new ConnectionFactory
                     {
                         HostName = "localhost",
                         Port = 5432
@@ -103,7 +108,7 @@ namespace Mercurio.Tests.TUnit.Extensions
                 })
                 .WithRabbitMqConnectionFactory("Secondary", _ =>
                 {
-                    var connectionFactory = new ConnectionFactory()
+                    var connectionFactory = new ConnectionFactory
                     {
                         HostName = "localhost",
                         Port = 5433
@@ -118,16 +123,16 @@ namespace Mercurio.Tests.TUnit.Extensions
 
             using var _ = Assert.Multiple();
 
-            await Assert.That(() => connectionProvider.GetConnectionAsync("Primary"))
-                .Throws<BrokerUnreachableException>();
+            await ThrowsExtensions
+                .Throws<BrokerUnreachableException>(Assert.That(() => connectionProvider.GetConnectionAsync("Primary")));
 
-            await Assert.That(() => connectionProvider.GetConnectionAsync("Secondary"))
-                .Throws<BrokerUnreachableException>();
+            await ThrowsExtensions
+                .Throws<BrokerUnreachableException>(Assert.That(() => connectionProvider.GetConnectionAsync("Secondary")));
 
-            await Assert.That(() => connectionProvider.GetConnectionAsync("NonRegister"))
-                .Throws<ArgumentException>();
+            await ThrowsExtensions
+                .Throws<ArgumentException>(Assert.That(() => connectionProvider.GetConnectionAsync("NonRegister")));
 
-            await Assert.That(() => ((IDisposable)connectionProvider).Dispose()).ThrowsNothing();
+            await ThrowsExtensions.ThrowsNothing(Assert.That(() => ((IDisposable)connectionProvider).Dispose()));
         }
 
         [Test]
@@ -142,10 +147,9 @@ namespace Mercurio.Tests.TUnit.Extensions
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
 
-            await Assert.That(() =>
+            await ThrowsExtensions.Throws<OptionsValidationException>(Assert.That(() =>
                 this.serviceCollection.BuildServiceProvider().GetRequiredService<IOptions<RetryPolicyConfiguration>>().Value
-            ).Throws<OptionsValidationException>();
-
+            ));
 
             this.serviceCollection.AddOptions<RetryPolicyConfiguration>()
                 .Configure(configuration =>
@@ -156,10 +160,9 @@ namespace Mercurio.Tests.TUnit.Extensions
                 .ValidateDataAnnotations()
                 .ValidateOnStart();
 
-            await Assert.That(() =>
+            await ThrowsExtensions.Throws<OptionsValidationException>(Assert.That(() =>
                 this.serviceCollection.BuildServiceProvider().GetRequiredService<IOptions<RetryPolicyConfiguration>>().Value
-            ).Throws<OptionsValidationException>();
-
+            ));
 
             this.serviceCollection.AddOptions<RetryPolicyConfiguration>()
                 .Configure(configuration =>
@@ -175,22 +178,30 @@ namespace Mercurio.Tests.TUnit.Extensions
                 .IsNotNull();
         }
 
-        private class MessagePackSerializer() : IMessageSerializerService, IMessageDeserializerService
+        private class MessagePackSerializer : IMessageSerializerService, IMessageDeserializerService
         {
-            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default) =>
+            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default)
+            {
                 throw new NotImplementedException("Attempt to serialize message using message pack");
+            }
 
-            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default) =>
+            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default)
+            {
                 throw new NotImplementedException("Attempt to serialize message using message pack");
+            }
         }
 
-        private class NewtonSoftSerializer() : IMessageSerializerService, IMessageDeserializerService
+        private class NewtonSoftSerializer : IMessageSerializerService, IMessageDeserializerService
         {
-            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default) =>
+            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default)
+            {
                 throw new NotImplementedException("Attempt to serialize message using NewtonSoft");
+            }
 
-            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default) =>
+            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default)
+            {
                 throw new NotImplementedException("Attempt to serialize message using NewtonSoft");
+            }
         }
     }
 }

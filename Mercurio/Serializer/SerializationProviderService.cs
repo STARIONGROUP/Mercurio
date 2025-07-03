@@ -26,25 +26,42 @@ namespace Mercurio.Serializer
     /// The <see cref="SerializationProviderService"/> Provides access to <see cref="IMessageSerializerService"/> and <see cref="IMessageDeserializerService"/>
     /// instances based on <see cref="SupportedSerializationFormat"/>.
     /// </summary>
-    /// <param name="serializers">Dictionary of <see cref="SupportedSerializationFormat"/> to <see cref="IMessageSerializerService"/> instances.</param>
-    /// <param name="deserializers">Dictionary of <see cref="SupportedSerializationFormat"/> to <see cref="IMessageDeserializerService"/> instances.</param>
-    /// <param name="defaultFormat">The <see cref="SupportedSerializationFormat"/> default format</param>
-    internal sealed class SerializationProviderService(IDictionary<SupportedSerializationFormat, IMessageSerializerService> serializers, IDictionary<SupportedSerializationFormat, IMessageDeserializerService> deserializers, SupportedSerializationFormat defaultFormat = SupportedSerializationFormat.Json) : ISerializationProviderService
+    internal sealed class SerializationProviderService : ISerializationProviderService
     {
+        /// <summary>
+        /// 
+        /// </summary>
+        private readonly IDictionary<string, IMessageSerializerService> serializers;
+        private readonly IDictionary<string, IMessageDeserializerService> deserializers;
+
+        /// <summary>
+        /// The <see cref="SerializationProviderService"/> Provides access to <see cref="IMessageSerializerService"/> and <see cref="IMessageDeserializerService"/>
+        /// instances based on <see cref="SupportedSerializationFormat"/>.
+        /// </summary>
+        /// <param name="serializers">Dictionary of <see cref="string"/> to <see cref="IMessageSerializerService"/> instances.</param>
+        /// <param name="deserializers">Dictionary of <see cref="string"/> to <see cref="IMessageDeserializerService"/> instances.</param>
+        /// <param name="defaultFormat">The default format</param>
+        public SerializationProviderService(IDictionary<string, IMessageSerializerService> serializers, IDictionary<string, IMessageDeserializerService> deserializers, string defaultFormat = SupportedSerializationFormat.JsonFormat)
+        {
+            this.serializers = serializers;
+            this.deserializers = deserializers;
+            this.DefaultFormat = defaultFormat;
+        }
+
         /// <summary>
         /// Gets the dictionary of serializers registered for different <see cref="SupportedSerializationFormat"/>s.
         /// </summary>
-        public SupportedSerializationFormat DefaultFormat { get; } = defaultFormat;
+        public string DefaultFormat { get; }
 
         /// <summary>
         /// Resolves a serializer for the specified <paramref name="format"/>.
         /// </summary>
-        /// <param name="format">The <see cref="SupportedSerializationFormat"/> for which to retrieve the serializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
+        /// <param name="format">The string value for which to retrieve the serializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
         /// <returns>The <see cref="IMessageSerializerService"/> instance registered for the given format.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no serializer is registered for the specified format.</exception>
-        public IMessageSerializerService ResolveSerializer(SupportedSerializationFormat format = SupportedSerializationFormat.Unspecified)
+        public IMessageSerializerService ResolveSerializer(string format = SupportedSerializationFormat.Unspecified)
         {
-            if (serializers.TryGetValue(format, out var serializer))
+            if (this.serializers.TryGetValue(format, out var serializer))
             {
                 return serializer;
             }
@@ -55,12 +72,12 @@ namespace Mercurio.Serializer
         /// <summary>
         /// Resolves a deserializer for the specified <paramref name="format"/>.
         /// </summary>
-        /// <param name="format">The <see cref="SupportedSerializationFormat"/> for which to retrieve the deserializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
+        /// <param name="format">The string value for which to retrieve the serializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
         /// <returns>The <see cref="IMessageDeserializerService"/> instance registered for the given format.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no deserializer is registered for the specified format.</exception>
-        public IMessageDeserializerService ResolveDeserializer(SupportedSerializationFormat format = SupportedSerializationFormat.Unspecified)
+        public IMessageDeserializerService ResolveDeserializer(string format = SupportedSerializationFormat.Unspecified)
         {
-            if (deserializers.TryGetValue(format, out var deserializer))
+            if (this.deserializers.TryGetValue(format, out var deserializer))
             {
                 return deserializer;
             }

@@ -29,7 +29,7 @@ namespace Mercurio.Configuration.SerializationConfiguration
     /// </summary>
     public interface ISerializationConfigurationBuilder
     {
-        // <summary>
+        /// <summary>
         /// Registers the default JSON serialization service.
         /// </summary>
         ISerializationConfigurationBuilder UseDefaultJson();

@@ -30,13 +30,8 @@ namespace Mercurio.Tests.Extensions
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Options;
 
-    using Moq;
-
     using RabbitMQ.Client;
     using RabbitMQ.Client.Exceptions;
-
-    using System.IO;
-    using System.Threading;
 
     [TestFixture]
     public class ServiceCollectionExtensionsTestFixture
@@ -48,88 +43,6 @@ namespace Mercurio.Tests.Extensions
         {
             this.serviceCollection = new ServiceCollection();
             this.serviceCollection.AddLogging();
-        }
-
-        [Test]
-        public async Task VerifyProviderRegistrationWithOtherSerializers()
-        {
-            this.serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactoryAsync("Primary", _ =>
-                {
-                    var connectionFactory = new ConnectionFactory()
-                    {
-                        HostName = "localhost",
-                        Port = 5432
-                    };
-                    return Task.FromResult(connectionFactory);
-                })
-                .WithRabbitMqConnectionFactory("Secondary", _ =>
-                {
-                    var connectionFactory = new ConnectionFactory()
-                    {
-                        HostName = "localhost",
-                        Port = 5433
-                    };
-                    return connectionFactory;
-                })
-                .WithSerialization(x => x.UseJson<NewtonSoftSerializer>().UseMessagePack<MessagePackSerializer>(true));
-
-            this.serviceCollection.AddTransient<IMessageClientService, MessageClientService>();
-
-            var serviceProvider = this.serviceCollection.BuildServiceProvider();
-            var deserializers = serviceProvider.GetService<IDictionary<SupportedSerializationFormat, IMessageDeserializerService>>();
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(serviceProvider.GetKeyedService<IMessageSerializerService>(SupportedSerializationFormat.Unspecified), Is.InstanceOf<MessagePackSerializer>());
-                Assert.That(deserializers, Has.Count.EqualTo(3));
-                Assert.That(() => serviceProvider.GetKeyedService<MessagePackSerializer>(SupportedSerializationFormat.MessagePack), Is.Not.Null, "MessagePackSerializer should be registered and resolved successfully.");
-                Assert.That(() => serviceProvider.GetKeyedService<NewtonSoftSerializer>(SupportedSerializationFormat.Json), Is.Not.Null, "NewtonSoftSerializer should be registered and resolved successfully.");
-                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>(), Is.Not.Null, "ISerializationProviderService should be registered and resolved successfully.");
-                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(SupportedSerializationFormat.Json), Is.InstanceOf<NewtonSoftSerializer>());
-                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer("application/json".ToSupportedSerializationFormat()), Is.InstanceOf<NewtonSoftSerializer>());
-                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveSerializer(), Is.InstanceOf<MessagePackSerializer>());
-                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(), Is.InstanceOf<MessagePackSerializer>());
-            });
-        }
-
-        [Test]
-        public async Task VerifyProviderRegistration()
-        {
-            this.serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactoryAsync("Primary", _ =>
-                {
-                    var connectionFactory = new ConnectionFactory()
-                    {
-                        HostName = "localhost",
-                        Port = 5432
-                    };
-
-                    return Task.FromResult(connectionFactory);
-                })
-                .WithRabbitMqConnectionFactory("Secondary", _ =>
-                {
-                    var connectionFactory = new ConnectionFactory()
-                    {
-                        HostName = "localhost",
-                        Port = 5433
-                    };
-
-                    return connectionFactory;
-                })
-                .WithSerialization();
-
-
-            var serviceProvider = this.serviceCollection.BuildServiceProvider();
-            var connectionProvider = serviceProvider.GetRequiredService<IRabbitMqConnectionProvider>();
-
-            await Assert.MultipleAsync(async () =>
-            {
-                await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("Primary"), Throws.Exception.TypeOf<BrokerUnreachableException>());
-                await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("Secondary"), Throws.Exception.TypeOf<BrokerUnreachableException>());
-                await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("NonRegister"), Throws.ArgumentException);
-                Assert.That(() => ((IDisposable)connectionProvider).Dispose(), Throws.Nothing);
-            });
         }
 
         [Test]
@@ -169,22 +82,113 @@ namespace Mercurio.Tests.Extensions
             Assert.That(this.serviceCollection.BuildServiceProvider().GetRequiredService<IOptions<RetryPolicyConfiguration>>().Value, Is.Not.Null);
         }
 
-        private class MessagePackSerializer() : IMessageSerializerService, IMessageDeserializerService
+        [Test]
+        public async Task VerifyProviderRegistration()
         {
-            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default) => 
-                throw new NotImplementedException("Attempt to serialize message using message pack");
+            this.serviceCollection.AddRabbitMqConnectionProvider()
+                .WithRabbitMqConnectionFactoryAsync("Primary", _ =>
+                {
+                    var connectionFactory = new ConnectionFactory
+                    {
+                        HostName = "localhost",
+                        Port = 5432
+                    };
 
-            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default) => 
-                throw new NotImplementedException("Attempt to serialize message using message pack");
+                    return Task.FromResult(connectionFactory);
+                })
+                .WithRabbitMqConnectionFactory("Secondary", _ =>
+                {
+                    var connectionFactory = new ConnectionFactory
+                    {
+                        HostName = "localhost",
+                        Port = 5433
+                    };
+
+                    return connectionFactory;
+                })
+                .WithSerialization();
+
+            var serviceProvider = this.serviceCollection.BuildServiceProvider();
+            var connectionProvider = serviceProvider.GetRequiredService<IRabbitMqConnectionProvider>();
+
+            await Assert.MultipleAsync(async () =>
+            {
+                await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("Primary"), Throws.Exception.TypeOf<BrokerUnreachableException>());
+                await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("Secondary"), Throws.Exception.TypeOf<BrokerUnreachableException>());
+                await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("NonRegister"), Throws.ArgumentException);
+                Assert.That(() => ((IDisposable)connectionProvider).Dispose(), Throws.Nothing);
+            });
         }
 
-        private class NewtonSoftSerializer() : IMessageSerializerService, IMessageDeserializerService
+        [Test]
+        public void VerifyProviderRegistrationWithOtherSerializers()
         {
-            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default) => 
-                throw new NotImplementedException("Attempt to serialize message using NewtonSoft 🤮");
+            this.serviceCollection.AddRabbitMqConnectionProvider()
+                .WithRabbitMqConnectionFactoryAsync("Primary", _ =>
+                {
+                    var connectionFactory = new ConnectionFactory
+                    {
+                        HostName = "localhost",
+                        Port = 5432
+                    };
 
-            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default) => 
-                throw new NotImplementedException("Attempt to serialize message using NewtonSoft 🤮");
+                    return Task.FromResult(connectionFactory);
+                })
+                .WithRabbitMqConnectionFactory("Secondary", _ =>
+                {
+                    var connectionFactory = new ConnectionFactory
+                    {
+                        HostName = "localhost",
+                        Port = 5433
+                    };
+
+                    return connectionFactory;
+                })
+                .WithSerialization(x => x.UseJson<NewtonSoftSerializer>().UseMessagePack<MessagePackSerializer>());
+
+            this.serviceCollection.AddTransient<IMessageClientService, MessageClientService>();
+
+            var serviceProvider = this.serviceCollection.BuildServiceProvider();
+            var deserializers = serviceProvider.GetService<IDictionary<string, IMessageDeserializerService>>();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(serviceProvider.GetKeyedService<IMessageSerializerService>(SupportedSerializationFormat.Unspecified), Is.InstanceOf<MessagePackSerializer>());
+                Assert.That(deserializers, Has.Count.EqualTo(3));
+                Assert.That(() => serviceProvider.GetKeyedService<MessagePackSerializer>(SupportedSerializationFormat.MessagePackFormat), Is.Not.Null, "MessagePackSerializer should be registered and resolved successfully.");
+                Assert.That(() => serviceProvider.GetKeyedService<NewtonSoftSerializer>(SupportedSerializationFormat.JsonFormat), Is.Not.Null, "NewtonSoftSerializer should be registered and resolved successfully.");
+                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>(), Is.Not.Null, "ISerializationProviderService should be registered and resolved successfully.");
+                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(SupportedSerializationFormat.JsonFormat), Is.InstanceOf<NewtonSoftSerializer>());
+                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer("application/json"), Is.InstanceOf<NewtonSoftSerializer>());
+                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveSerializer(), Is.InstanceOf<MessagePackSerializer>());
+                Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(), Is.InstanceOf<MessagePackSerializer>());
+            });
+        }
+
+        private class MessagePackSerializer : IMessageSerializerService, IMessageDeserializerService
+        {
+            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default)
+            {
+                throw new NotImplementedException("Attempt to serialize message using message pack");
+            }
+
+            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default)
+            {
+                throw new NotImplementedException("Attempt to serialize message using message pack");
+            }
+        }
+
+        private class NewtonSoftSerializer : IMessageSerializerService, IMessageDeserializerService
+        {
+            public Task<TMessage> DeserializeAsync<TMessage>(Stream content, CancellationToken cancellationToken = default)
+            {
+                throw new NotImplementedException("Attempt to serialize message using NewtonSoft");
+            }
+
+            public Task<Stream> SerializeAsync(object obj, CancellationToken cancellationToken = default)
+            {
+                throw new NotImplementedException("Attempt to serialize message using NewtonSoft");
+            }
         }
     }
 }

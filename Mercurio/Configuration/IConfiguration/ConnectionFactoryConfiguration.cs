@@ -42,8 +42,8 @@ namespace Mercurio.Configuration.IConfiguration
                 throw new ArgumentNullException(nameof(connectionName), "A connection name must be provided.");
             }
 
-            ConnectionName = connectionName;
-            ConnectionFactory = connectionFactoryAsync ?? throw new ArgumentNullException(nameof(connectionFactoryAsync), "A connection factory must be provided.");
+            this.ConnectionName = connectionName;
+            this.ConnectionFactory = connectionFactoryAsync ?? throw new ArgumentNullException(nameof(connectionFactoryAsync), "A connection factory must be provided.");
         }
 
         /// <summary>

@@ -26,14 +26,12 @@ namespace Mercurio.Messaging
 
     using CommunityToolkit.HighPerformance;
 
-    using Mercurio.Configuration.IConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
     using Mercurio.Serializer;
 
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
 
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
@@ -50,7 +48,7 @@ namespace Mercurio.Messaging
         /// <summary>
         /// Gets the injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities
         /// </summary>
-        protected readonly ISerializationProviderService serializationProviderService;
+        protected readonly ISerializationProviderService SerializationProviderService;
 
         /// <summary>
         /// Initializes a new instance of <see cref="MessageClientService" />
@@ -64,7 +62,7 @@ namespace Mercurio.Messaging
         public MessageClientService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationProviderService,
             ILogger<MessageClientService> logger) : base(connectionProvider, logger)
         {
-            this.serializationProviderService = serializationProviderService;
+            this.SerializationProviderService = serializationProviderService;
         }
 
         /// <summary>
@@ -308,20 +306,21 @@ namespace Mercurio.Messaging
                 {
                     Type = typeof(TMessage).Name,
                     DeliveryMode = DeliveryModes.Persistent,
-                    ContentType = this.serializationProviderService.DefaultFormat.ToContentType(),
+                    ContentType = this.SerializationProviderService.DefaultFormat
                 };
 
                 configureProperties?.Invoke(properties);
+
                 this.OnPrePush(message, properties, exchangeConfiguration);
 
-                var stream = await this.serializationProviderService.ResolveSerializer().SerializeAsync(message, cancellationToken);
+                var stream = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(message, cancellationToken);
 
                 var routingKey = !string.IsNullOrEmpty(exchangeConfiguration.RoutingKey) || !string.IsNullOrEmpty(exchangeConfiguration.ExchangeName)
                     ? exchangeConfiguration.RoutingKey
                     : exchangeConfiguration.QueueName;
 
                 var body = stream.ToReadOnlyMemory();
-                
+
                 await channelLease.Channel.BasicPublishAsync(exchangeConfiguration.PushExchangeName,
                     routingKey, false, properties,
                     body, cancellationToken);
@@ -383,7 +382,7 @@ namespace Mercurio.Messaging
             {
                 this.OnMessageReceive(message, exchangeConfiguration);
                 using var stream = message.Body.AsStream();
-                var content = await this.serializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType.ToSupportedSerializationFormat()).DeserializeAsync<TMessage>(stream, cancellationToken);
+                var content = await this.SerializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType).DeserializeAsync<TMessage>(stream, cancellationToken);
                 observer.OnNext(content);
                 await Task.CompletedTask;
             }

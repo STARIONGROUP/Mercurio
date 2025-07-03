@@ -20,19 +20,13 @@
 
 namespace Mercurio.Messaging
 {
-    using Mercurio.Configuration;
     using Mercurio.Model;
     using Mercurio.Provider;
 
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-
-    using Polly;
 
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
-
-    using System.Collections.Concurrent;
 
     /// <summary>
     /// The <see cref="MessageClientBaseService" /> is the base abstract class for any RabbitMQ client
@@ -120,12 +114,24 @@ namespace Mercurio.Messaging
         public abstract Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
         /// Asynchronously leases a channel from the pool or creates one if necessary.
         /// </summary>
         /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
-        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/></param>
-        /// <returns>A <see cref="ValueTask{TResult}"/> of <see cref="ChannelLease"/></returns>
-        public async ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default) => await this.ConnectionProvider.LeaseChannelAsync(connectionName, cancellationToken);
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
+        public async ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default)
+        {
+            return await this.ConnectionProvider.LeaseChannelAsync(connectionName, cancellationToken);
+        }
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -134,15 +140,6 @@ namespace Mercurio.Messaging
         protected virtual void Dispose(bool disposing)
         {
             //Nothing to dispose so far
-        }
-
-        /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        public void Dispose()
-        {
-            this.Dispose(true);
-            GC.SuppressFinalize(this);
         }
     }
 }

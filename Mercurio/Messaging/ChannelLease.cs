@@ -63,7 +63,10 @@ namespace Mercurio.Messaging
         /// <summary>
         /// Disposes of the leased channel, returning it to the owning pool.
         /// </summary>
-        public void Dispose() => this.owner?.ReleaseChannel(this.connectionName, this.Channel);
+        public void Dispose()
+        {
+            this.owner.ReleaseChannel(this.connectionName, this.Channel);
+        }
 
         /// <summary>
         /// Asynchronously releases the leased channel back to the owning pool.
@@ -74,10 +77,7 @@ namespace Mercurio.Messaging
         /// </returns>
         public async ValueTask DisposeAsync()
         {
-            if (this.owner != null)
-            {
-                await this.owner.ReleaseChannelAsync(this.connectionName, this.Channel);
-            }
+            await this.owner.ReleaseChannelAsync(this.connectionName, this.Channel);
         }
     }
 }

@@ -24,14 +24,12 @@ namespace Mercurio.Messaging
 
     using CommunityToolkit.HighPerformance;
 
-    using Mercurio.Configuration.IConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
     using Mercurio.Serializer;
 
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
 
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
@@ -159,7 +157,7 @@ namespace Mercurio.Messaging
         {
             this.OnMessageReceive(args, new DefaultExchangeConfiguration(queueName));
 
-            var request = await this.serializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType.ToSupportedSerializationFormat())
+            var request = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
                 .DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
 
             var response = await onReceiveAsync(request);
@@ -170,14 +168,14 @@ namespace Mercurio.Messaging
             var properties = new BasicProperties
             {
                 Type = typeof(TResponse).Name,
-                ContentType = this.serializationProviderService.DefaultFormat.ToContentType()
+                ContentType = this.SerializationProviderService.DefaultFormat
             };
 
             configureProperties?.Invoke(properties);
             var receivedProperties = args.BasicProperties;
 
             properties.CorrelationId = receivedProperties.CorrelationId;
-            var serializedResponse = await this.serializationProviderService.ResolveSerializer().SerializeAsync(response, cancellationToken);
+            var serializedResponse = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(response, cancellationToken);
 
             await exchangeChannel.BasicPublishAsync(string.Empty, receivedProperties.ReplyTo!, true, properties, serializedResponse.ToReadOnlyMemory(), cancellationToken);
 

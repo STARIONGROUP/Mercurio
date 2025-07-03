@@ -28,22 +28,22 @@ namespace Mercurio.Serializer
     public interface ISerializationProviderService
     {
         /// <summary>
-        /// Gets the dictionary of serializers registered for different <see cref="SupportedSerializationFormat"/>s.
+        /// Gets the default format used by the current <see cref="ISerializationProviderService" />
         /// </summary>
-        SupportedSerializationFormat DefaultFormat { get; }
+        string DefaultFormat { get; }
 
         /// <summary>
         /// Resolves a serializer for the specified <paramref name="format"/>.
         /// </summary>
-        /// <param name="format">The <see cref="SupportedSerializationFormat"/> for which to retrieve the serializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
+        /// <param name="format">The string value for which to retrieve the serializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
         /// <returns>The <see cref="IMessageSerializerService"/> instance registered for the given format.</returns>
-        IMessageSerializerService ResolveSerializer(SupportedSerializationFormat format = SupportedSerializationFormat.Unspecified);
+        IMessageSerializerService ResolveSerializer(string format = SupportedSerializationFormat.Unspecified);
 
         /// <summary>
         /// Resolves a deserializer for the specified <paramref name="format"/>.
         /// </summary>
-        /// <param name="format">The <see cref="SupportedSerializationFormat"/> for which to retrieve the deserializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
+        /// <param name="format">The string value for which to retrieve the serializer. Defaults to <see cref="SupportedSerializationFormat.Unspecified"/>.</param>
         /// <returns>The <see cref="IMessageDeserializerService"/> instance registered for the given format.</returns>
-        IMessageDeserializerService ResolveDeserializer(SupportedSerializationFormat format = SupportedSerializationFormat.Unspecified);
+        IMessageDeserializerService ResolveDeserializer(string format = SupportedSerializationFormat.Unspecified);
     }
 }

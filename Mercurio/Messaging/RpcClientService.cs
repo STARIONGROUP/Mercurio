@@ -27,6 +27,7 @@ namespace Mercurio.Messaging
     using CommunityToolkit.HighPerformance;
 
     using Mercurio.Configuration.IConfiguration;
+    using Mercurio.Configuration.SerializationConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Provider;
     using Mercurio.Serializer;
@@ -166,7 +167,7 @@ namespace Mercurio.Messaging
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
                 {
-                    var response = await this.serializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType.ToSupportedSerializationFormat())
+                    var response = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
                         .DeserializeAsync<TResponse>(args.Body.AsStream());
 
                     taskCompletionSource.TrySetResult(response);
@@ -195,7 +196,7 @@ namespace Mercurio.Messaging
             var properties = new BasicProperties
             {
                 Type = typeof(TResponse).Name,
-                ContentType = this.serializationProviderService.DefaultFormat.ToContentType(),
+                ContentType = this.SerializationProviderService.DefaultFormat
             };
 
             configureProperties?.Invoke(properties);
@@ -210,7 +211,7 @@ namespace Mercurio.Messaging
                     this.callbacks.TryAdd(correlationId, taskCompletionSource);
                     rpcQueueDeclared.ChannelLease.Channel.CallbackExceptionAsync += ChannelOnCallbackException;
 
-                    var serializedBody = await this.serializationProviderService.ResolveSerializer().SerializeAsync(request, cancellationToken);
+                    var serializedBody = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(request, cancellationToken);
                     await rpcQueueDeclared.ChannelLease.Channel.BasicPublishAsync(string.Empty, rpcServerQueueName, true, properties, serializedBody.ToReadOnlyMemory(), cancellationToken);
 
                     using var cancellationTokenRegistration =

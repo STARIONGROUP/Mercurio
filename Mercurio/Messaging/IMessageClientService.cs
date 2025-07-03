@@ -84,5 +84,13 @@ namespace Mercurio.Messaging
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
         Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Asynchronously leases a channel from the pool or creates one if necessary.
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
+        ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default);
     }
 }

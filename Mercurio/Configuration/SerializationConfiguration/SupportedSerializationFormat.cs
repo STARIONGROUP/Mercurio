@@ -21,23 +21,23 @@
 namespace Mercurio.Configuration.SerializationConfiguration
 {
     /// <summary>
-    /// Enumeration representing the supported serialization formats for message serialization and deserialization.
+    /// Static values defining supported serialization formats for message serialization and deserialization provided by Mercurio.
     /// </summary>
-    public enum SupportedSerializationFormat
+    public static class SupportedSerializationFormat
     {
         /// <summary>
-        /// Indicates that no specific serialization format is specified.
+        /// When no format is specified
         /// </summary>
-        Unspecified,
+        public const string Unspecified = "";
 
         /// <summary>
         /// The JSON serialization format
         /// </summary>
-        Json,
-
+        public const string JsonFormat = "application/json";
+        
         /// <summary>
         /// The MessagePack serialization format
         /// </summary>
-        MessagePack,
+        public const string MessagePackFormat = "application/x-msgpack";
     }
 }
