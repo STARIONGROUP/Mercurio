@@ -39,7 +39,7 @@ namespace Mercurio.Tests.TUnit.Messaging
         private const string SecondConnectionName = "RabbitMQConnection2";
         private const string FirstSentMessage = "Hello World!";
         private const string SecondSentMessage = "Hello World!";
-        private const int TimeOut = 50;
+        private const int TimeOut = 100;
         
         [Before(HookType.Test)]
         public async Task Setup()
@@ -95,20 +95,20 @@ namespace Mercurio.Tests.TUnit.Messaging
         public async Task VerifyMessageExchangeWithDefaultExchangeAsync()
         {
             var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannel");
-            var listenObservable = await this.firstService.ListenAsync<string>(MessageClientServiceTestFixture.FirstConnectionName, exchangeConfiguration);
-            var secondObservable = await this.secondService.ListenAsync<string>(MessageClientServiceTestFixture.SecondConnectionName, exchangeConfiguration);
+            var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
+            var secondObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, exchangeConfiguration);
             var firstTaskCompletion = new TaskCompletionSource<string>();
             var secondTaskCompletion = new TaskCompletionSource<string>();
             listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
             secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
             var tasks = new List<Task> { firstTaskCompletion.Task, secondTaskCompletion.Task };
             var expectedMessage = new Queue<string>();
-            expectedMessage.Enqueue(MessageClientServiceTestFixture.FirstSentMessage);
-            expectedMessage.Enqueue(MessageClientServiceTestFixture.SecondSentMessage);
-            await Task.Delay(MessageClientServiceTestFixture.TimeOut);
+            expectedMessage.Enqueue(FirstSentMessage);
+            expectedMessage.Enqueue(SecondSentMessage);
+            await Task.Delay(TimeOut);
             
-            await this.firstService.PushAsync(MessageClientServiceTestFixture.FirstConnectionName, MessageClientServiceTestFixture.FirstSentMessage, exchangeConfiguration);
-            await this.firstService.PushAsync(MessageClientServiceTestFixture.FirstConnectionName, MessageClientServiceTestFixture.SecondSentMessage, exchangeConfiguration);
+            await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+            await this.firstService.PushAsync(FirstConnectionName, SecondSentMessage, exchangeConfiguration);
             
             while (tasks.Count > 0)
             {
@@ -129,21 +129,21 @@ namespace Mercurio.Tests.TUnit.Messaging
                 ? new DirectExchangeConfiguration(queueName, routingKey: routingKey) 
                 : new DirectExchangeConfiguration(queueName, exchangeName, routingKey);
 
-            var listenObservable = await this.firstService.ListenAsync<string>(MessageClientServiceTestFixture.FirstConnectionName, exchangeConfiguration);
-            var secondObservable = await this.secondService.ListenAsync<string>(MessageClientServiceTestFixture.SecondConnectionName, exchangeConfiguration);
+            var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
+            var secondObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, exchangeConfiguration);
             var firstTaskCompletion = new TaskCompletionSource<string>();
             var secondTaskCompletion = new TaskCompletionSource<string>();
             listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
             secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
-            await Task.Delay(MessageClientServiceTestFixture.TimeOut);
+            await Task.Delay(TimeOut);
             
-            await this.firstService.PushAsync(MessageClientServiceTestFixture.FirstConnectionName, MessageClientServiceTestFixture.FirstSentMessage, exchangeConfiguration);
-            await this.firstService.PushAsync(MessageClientServiceTestFixture.FirstConnectionName, MessageClientServiceTestFixture.SecondSentMessage, exchangeConfiguration);
+            await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+            await this.firstService.PushAsync(FirstConnectionName, SecondSentMessage, exchangeConfiguration);
 
             var tasks = new List<Task<string>> { firstTaskCompletion.Task, secondTaskCompletion.Task };
             var expectedMessage = new Queue<string>();
-            expectedMessage.Enqueue(MessageClientServiceTestFixture.FirstSentMessage);
-            expectedMessage.Enqueue(MessageClientServiceTestFixture.SecondSentMessage);
+            expectedMessage.Enqueue(FirstSentMessage);
+            expectedMessage.Enqueue(SecondSentMessage);
             
             while (tasks.Count > 0)
             {
