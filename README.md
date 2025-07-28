@@ -6,6 +6,13 @@ A library to make RabbitMQ integration in .NET microservices seamless
 Mercurio provides RabbitMQ integration with common implementation of Messaging Client. This common implementation of messaging client reduce the need of code duplication on microservices implementation that requires to interacts with RabbitMQ.  
 It also eases the setup of ConnectionFactory and also to register multiple ConnectionFactory setup, using the _IRabbitMqConnectionProvider_.
 
+Mercurio follows RabbitMQ best practices by encouraging connection reuse and channel pooling per named connection. 
+Instead of creating new connections for every operation—which is inefficient and discouraged by RabbitMQ—it provides a shared, 
+thread-safe mechanism to lease and reuse channels from a limited pool tied to a single registered connection.
+This improves performance, resource management, and aligns with RabbitMQ's recommendations for production-grade messaging systems.
+
+See [channel reuse and connection management](https://github.com/STARIONGROUP/Mercurio/wiki/channel) for more details on the implementation.
+
 ## Examples
 ### Dependency Injection Registration
 ```csharp
@@ -32,17 +39,59 @@ serviceCollection.AddRabbitMqConnectionProvider()
 
         return connectionFactory;
     })
-    .WithDefaultJsonMessageSerializer();
+    .WithSerialization();
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
 var connectionProvider = serviceProvider.GetRequiredService<IRabbitMqConnectionProvider>();
 var primaryConnection = await  connectionProvider.GetConnectionAsync("Primary");
 ```
 
-### Message Serialization
-The _MessageClientService_ requires to serialize and deserialize messages sent on RabbitMQ. For that, two interfaces are declared: IMessageDeserializerService and IMessageSerializerService.  
-A JSON basic implementation is already provided and can be registered using the _.WithDefaultJsonMessageSerializer()_ extension method on the IServiceCollection.  
-This implementation provides basic JSON serialization using the System.Text.Json library.
+### 📦 Message Serialization
+
+Mercurio uses a flexible and extensible serialization system that supports multiple formats and allows format-specific resolution at runtime.
+
+By default, Mercurio registers **System.Text.Json**-based serializers and deserializers. However, you can register custom implementations or support additional formats like **MessagePack**.
+
+Serialization is configured using `.WithSerialization()` in your service registration:
+
+```csharp
+services
+    .AddRabbitMqConnectionProvider()
+    .WithSerialization(builder => builder
+        .UseDefaultJson() // Registers JsonMessageSerializerService that uses System.Text.Json as default serializer
+        .UseMessagePack<YourMessagePackSerializer>(asDefault: false)); // Optional additional format
+```
+
+Under the hood, serialization is format-aware:
+
+* Each format (e.g., `Json`, `MessagePack`) is keyed by `SupportedSerializationFormat` and is transported in the 'content type' header.
+* A central `SerializationProviderService` handles resolution of serializers and deserializers.
+* The **default format** (usually `Json`) is mapped to the special key `Unspecified`.
+
+The following interfaces drive the system:
+
+* `IMessageSerializerService` – used to serialize outgoing messages.
+* `IMessageDeserializerService` – used to deserialize incoming messages.
+* `ISerializationProviderService` – allows resolving serializers and deserializers for a given format.
+
+All registered services are added via `IServiceCollection` using Microsoft.Extensions.DependencyInjection’s [keyed services](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection-usage#keyed-service-registration).
+
+#### 🔧 Default Behavior
+
+If `.WithSerialization()` is called without configuration, Mercurio will:
+
+* Register `JsonMessageSerializerService` for both serializer and deserializer interfaces.
+* Use `SupportedSerializationFormat.Json` as the default.
+* Register a fallback mapping under `SupportedSerializationFormat.Unspecified`.
+
+#### 🔄 Format Resolution
+
+Serialization and deserialization for a given format can be resolved at runtime via:
+
+```csharp
+var serializer = serializationProvider.ResolveSerializer(SupportedSerializationFormat.Json);
+var deserializer = serializationProvider.ResolveDeserializer(SupportedSerializationFormat.MessagePack);
+```
 
 ### MessageClientService
 A base implementation of a _MessageClientService_ is available. It defines base behavior to push and listen after messages on queue and exchange.  

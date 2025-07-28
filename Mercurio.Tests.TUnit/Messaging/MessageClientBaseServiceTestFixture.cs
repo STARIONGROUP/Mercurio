@@ -18,42 +18,39 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Tests.Messaging
+namespace Mercurio.Tests.TUnit.Messaging
 {
-    using System.Diagnostics.CodeAnalysis;
-
+    using global::TUnit.Assertions.AssertConditions.Throws;
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Messaging;
     using Mercurio.Model;
     using Mercurio.Provider;
-
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-
     using Moq;
-
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
+    using System.Diagnostics.CodeAnalysis;
 
-    [TestFixture]
     public class MessageClientBaseServiceTestFixture
     {
         private TestMessageClientBaseService service;
         private Mock<IRabbitMqConnectionProvider> connectionProvider;
 
-        [SetUp]
-        public void Setup()
+        [Before(HookType.Test)]
+        public async Task Setup()
         {
             this.connectionProvider = new Mock<IRabbitMqConnectionProvider>();
             var logger = new Mock<ILogger<TestMessageClientBaseService>>();
             
             this.service = new TestMessageClientBaseService(this.connectionProvider.Object, logger.Object);
+            await Task.CompletedTask;
         }
 
-        [TearDown]
-        public void Teardown()
+        [After(HookType.Test)]
+        public async Task Teardown()
         {
             this.service.Dispose();
+            await Task.CompletedTask;
         }
 
         [Test]
@@ -62,18 +59,15 @@ namespace Mercurio.Tests.Messaging
             const string connectionName = "Connection";
             this.connectionProvider.Setup(x => x.LeaseChannelAsync(connectionName, It.IsAny<CancellationToken>())).ThrowsAsync(new ArgumentException("Non registered connection"));
 
-            await Assert.ThatAsync(() => this.service.TestGetChannelAsync(connectionName, CancellationToken.None), Throws.ArgumentException);
+            await Assert.That(() => this.service.TestGetChannelAsync(connectionName, CancellationToken.None)).Throws<ArgumentException>();
 
             var channel = new Mock<IChannel>();
 
             var lease = new ChannelLease(connectionName, channel.Object, this.connectionProvider.Object);
             this.connectionProvider.Setup(x => x.LeaseChannelAsync(connectionName, It.IsAny<CancellationToken>())).ReturnsAsync(lease);
-
-            await Assert.MultipleAsync(async () =>
-            {
-                await Assert.ThatAsync(async () => await this.service.TestGetChannelAsync(connectionName, CancellationToken.None), Is.SameAs(channel.Object));
-                this.connectionProvider.Verify(x => x.LeaseChannelAsync(connectionName, It.IsAny<CancellationToken>()), Times.Exactly(2));
-            });
+           
+            await Assert.That(async () => await this.service.TestGetChannelAsync(connectionName, CancellationToken.None)).IsSameReferenceAs(channel.Object);
+            this.connectionProvider.Verify(x => x.LeaseChannelAsync(connectionName, It.IsAny<CancellationToken>()), Times.Exactly(2));
         }
     }
     

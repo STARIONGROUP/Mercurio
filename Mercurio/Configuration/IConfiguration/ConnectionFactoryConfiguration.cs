@@ -18,7 +18,7 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Configuration
+namespace Mercurio.Configuration.IConfiguration
 {
     using Mercurio.Provider;
 
@@ -28,7 +28,7 @@ namespace Mercurio.Configuration
     /// The <see cref="ConnectionFactoryConfiguration" /> provides all required configuration material to be able to register <see cref="RabbitMQ.Client.ConnectionFactory"/>
     /// into the <see cref="IRabbitMqConnectionProvider"/>
     /// </summary>
-    internal class ConnectionFactoryConfiguration: IConnectionFactoryConfiguration
+    internal class ConnectionFactoryConfiguration : IConnectionFactoryConfiguration
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="ConnectionFactoryConfiguration"></see> class.
@@ -55,5 +55,13 @@ namespace Mercurio.Configuration
         /// Gets the <see cref="Func{T, TResult}"/> that should be invoked to create a <see cref="RabbitMQ.Client.ConnectionFactory"/> asynchronously
         /// </summary>
         public Func<IServiceProvider, Task<ConnectionFactory>> ConnectionFactory { get; }
+
+        /// <summary>
+        /// Gets or sets the default pool size of channel for the configured connection
+        /// </summary>
+        /// <remarks>
+        /// Defaults to 32
+        /// </remarks>
+        public int PoolSize { get; set; } = 32;
     }
 }

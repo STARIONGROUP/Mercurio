@@ -24,14 +24,12 @@ namespace Mercurio.Messaging
 
     using CommunityToolkit.HighPerformance;
 
-    using Mercurio.Configuration;
     using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
     using Mercurio.Serializer;
 
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
 
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
@@ -48,16 +46,10 @@ namespace Mercurio.Messaging
         /// The injected <see cref="IRabbitMqConnectionProvider" /> <see cref="IConnection" />
         /// access based on registered <see cref="ConnectionFactory" />
         /// </param>
-        /// <param name="serializerService">The injected <see cref="IMessageSerializerService" /> that will provide message serialization capabilities</param>
-        /// <param name="deserializerService">The injected <see cref="IMessageDeserializerService" /> that will provide message deserialization capabalities</param>
+        /// <param name="serializationService">The injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities</param>
         /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
-        /// <param name="policyConfiguration">
-        /// The optional injected and configured <see cref="IOptions{TOptions}" /> of
-        /// <see cref="RetryPolicyConfiguration" />. In case of null, using default value of
-        /// <see cref="MessageClientBaseService.retryPolicyConfiguration" />
-        /// </param>
-        public RpcServerService(IRabbitMqConnectionProvider connectionProvider, IMessageSerializerService serializerService, IMessageDeserializerService deserializerService,
-            ILogger<RpcServerService> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, serializerService, deserializerService, logger, policyConfiguration)
+        public RpcServerService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationService, ILogger<RpcServerService> logger) 
+            : base(connectionProvider, serializationService, logger)
         {
         }
 
@@ -111,18 +103,18 @@ namespace Mercurio.Messaging
         private async Task<IDisposable> ListenForRequestInternalAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
             AsyncEventingBasicConsumer consumer = null;
-            IChannel channel = null;
+            ChannelLease channelLease = default;
 
             try
             {
-                channel = await this.GetChannelAsync(connectionName, cancellationToken);
-                await channel.QueueDeclareAsync(queueName, false, false, false, cancellationToken: cancellationToken);
-                await channel.BasicQosAsync(0, 1, false, cancellationToken);
+                channelLease = await this.ConnectionProvider.LeaseChannelAsync(connectionName, cancellationToken);
+                await channelLease.Channel.QueueDeclareAsync(queueName, false, false, false, cancellationToken: cancellationToken);
+                await channelLease.Channel.BasicQosAsync(0, 1, false, cancellationToken);
 
-                consumer = new AsyncEventingBasicConsumer(channel);
+                consumer = new AsyncEventingBasicConsumer(channelLease.Channel);
                 consumer.ReceivedAsync += OnMessageReceiveAsync;
 
-                await channel.BasicConsumeAsync(queueName, false, consumer, cancellationToken);
+                await channelLease.Channel.BasicConsumeAsync(queueName, false, consumer, cancellationToken);
             }
             catch (TimeoutException)
             {
@@ -140,7 +132,7 @@ namespace Mercurio.Messaging
                     consumer.ReceivedAsync -= OnMessageReceiveAsync;
                 }
 
-                channel?.Dispose();
+                channelLease.Dispose();
             });
 
             async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs args)
@@ -164,7 +156,10 @@ namespace Mercurio.Messaging
         private async Task OnRequestReceivedAsync<TRequest, TResponse>(object sender, BasicDeliverEventArgs args, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
             this.OnMessageReceive(args, new DefaultExchangeConfiguration(queueName));
-            var request = await this.DeserializerService.DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
+
+            var request = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
+                .DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
+
             var response = await onReceiveAsync(request);
 
             var consumer = (AsyncEventingBasicConsumer)sender;
@@ -173,14 +168,14 @@ namespace Mercurio.Messaging
             var properties = new BasicProperties
             {
                 Type = typeof(TResponse).Name,
-                ContentType = "application/json"
+                ContentType = this.SerializationProviderService.DefaultFormat
             };
 
             configureProperties?.Invoke(properties);
             var receivedProperties = args.BasicProperties;
 
             properties.CorrelationId = receivedProperties.CorrelationId;
-            var serializedResponse = await this.SerializerService.SerializeAsync(response, cancellationToken);
+            var serializedResponse = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(response, cancellationToken);
 
             await exchangeChannel.BasicPublishAsync(string.Empty, receivedProperties.ReplyTo!, true, properties, serializedResponse.ToReadOnlyMemory(), cancellationToken);
 

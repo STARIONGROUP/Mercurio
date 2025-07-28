@@ -18,7 +18,7 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Configuration
+namespace Mercurio.Configuration.IConfiguration
 {
     using System.ComponentModel.DataAnnotations;
 
@@ -33,7 +33,7 @@ namespace Mercurio.Configuration
         /// </summary>
         [Range(0, int.MaxValue, ErrorMessage = "Please provide a value greater than 0")]
         public int MaxConnectionRetryAttempts { get; set; } = 4;
-        
+
         /// <summary>
         /// Define the timespan to wait in case of failure before retrying, expressed in seconds
         /// </summary>

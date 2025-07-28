@@ -18,7 +18,7 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Tests.Messaging
+namespace Mercurio.Tests.TUnit.Messaging
 {
     using System.Globalization;
 
@@ -30,24 +30,23 @@ namespace Mercurio.Tests.Messaging
 
     using RabbitMQ.Client;
 
-    [TestFixture]
     [Category("Integration")]
-    [NonParallelizable]
+    [NotInParallel]
     public class RpcCommunicationTestFixture
     {
+        private const string FirstConnectionName = "RabbitMQConnection1";
+        private const string SecondConnectionName = "RabbitMQConnection2";
         private IRpcClientService<string> rpcClientService;
         private IRpcServerService rpcServerService;
         private ServiceProvider serviceProvider;
-        private const string FirstConnectionName = "RabbitMQConnection1";
-        private const string SecondConnectionName = "RabbitMQConnection2";
 
-        [SetUp]
-        public void Setup()
+        [Before(Test)]
+        public async Task Setup()
         {
             var serviceCollection = new ServiceCollection();
-            
+
             serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactory(FirstConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(FirstConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -56,10 +55,10 @@ namespace Mercurio.Tests.Messaging
                         UserName = "guest",
                         Password = "guest"
                     };
-                    
+
                     return connectionFactory;
                 })
-                .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(SecondConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -68,20 +67,21 @@ namespace Mercurio.Tests.Messaging
                         UserName = "guest",
                         Password = "guest"
                     };
-                    
+
                     return connectionFactory;
                 })
                 .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
-            serviceCollection.AddTransient<IRpcServerService,RpcServerService>();
+            serviceCollection.AddTransient<IRpcServerService, RpcServerService>();
             serviceCollection.AddTransient<IRpcClientService<string>, RpcClientService<string>>();
             this.serviceProvider = serviceCollection.BuildServiceProvider();
             this.rpcClientService = this.serviceProvider.GetRequiredService<IRpcClientService<string>>();
             this.rpcServerService = this.serviceProvider.GetRequiredService<IRpcServerService>();
+            await Task.CompletedTask;
         }
 
-        [TearDown]
+        [After(Test)]
         public void Teardown()
         {
             this.rpcClientService.Dispose();
@@ -99,9 +99,9 @@ namespace Mercurio.Tests.Messaging
             clientRequestObservable.Subscribe(result => taskComplettion.SetResult(result));
 
             await Task.Delay(50);
-            
+
             await taskComplettion.Task;
-            Assert.That(taskComplettion.Task.Result, Is.EqualTo("41"));
+            await Assert.That(taskComplettion.Task.Result).IsEqualTo("41");
             disposable.Dispose();
         }
 

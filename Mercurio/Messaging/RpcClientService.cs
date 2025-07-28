@@ -26,7 +26,8 @@ namespace Mercurio.Messaging
 
     using CommunityToolkit.HighPerformance;
 
-    using Mercurio.Configuration;
+    using Mercurio.Configuration.IConfiguration;
+    using Mercurio.Configuration.SerializationConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Provider;
     using Mercurio.Serializer;
@@ -62,16 +63,10 @@ namespace Mercurio.Messaging
         /// The injected <see cref="IRabbitMqConnectionProvider" /> <see cref="IConnection" />
         /// access based on registered <see cref="ConnectionFactory" />
         /// </param>
-        /// <param name="serializerService">The injected <see cref="IMessageSerializerService" /> that will provide message serialization capabilities</param>
-        /// <param name="deserializerService">The injected <see cref="IMessageDeserializerService" /> that will provide message deserialization capabalities</param>
+        /// <param name="serializationService">The injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities</param>
         /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
-        /// <param name="policyConfiguration">
-        /// The optional injected and configured <see cref="IOptions{TOptions}" /> of
-        /// <see cref="RetryPolicyConfiguration" />. In case of null, using default value of
-        /// <see cref="MessageClientBaseService.retryPolicyConfiguration" />
-        /// </param>
-        public RpcClientService(IRabbitMqConnectionProvider connectionProvider, IMessageSerializerService serializerService, IMessageDeserializerService deserializerService,
-            ILogger<RpcClientService<TResponse>> logger, IOptions<RetryPolicyConfiguration> policyConfiguration = null) : base(connectionProvider, serializerService, deserializerService, logger, policyConfiguration)
+        public RpcClientService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationService, ILogger<RpcClientService<TResponse>> logger) 
+            : base(connectionProvider, serializationService, logger)
         {
         }
 
@@ -151,18 +146,18 @@ namespace Mercurio.Messaging
                 return rpcQueue;
             }
 
-            var channel = await this.GetChannelAsync(connectionName);
-            var queueDeclare = await channel.QueueDeclareAsync();
+            var channelLease = await this.ConnectionProvider.LeaseChannelAsync(connectionName);
+            var queueDeclare = await channelLease.Channel.QueueDeclareAsync();
 
-            var consumer = new AsyncEventingBasicConsumer(channel);
+            var consumer = new AsyncEventingBasicConsumer(channelLease.Channel);
 
             consumer.ReceivedAsync += OnRpcResponseReceivedAsync;
 
             var disposable = Disposable.Create(() => { consumer.ReceivedAsync -= OnRpcResponseReceivedAsync; });
 
-            var rpcQueueDeclared = new RpcQueueDeclared(channel, queueDeclare.QueueName, disposable);
+            var rpcQueueDeclared = new RpcQueueDeclared(channelLease, queueDeclare.QueueName, disposable);
             this.rpcQueueDeclareds[connectionName] = rpcQueueDeclared;
-            await channel.BasicConsumeAsync(queueDeclare.QueueName, true, consumer);
+            await channelLease.Channel.BasicConsumeAsync(queueDeclare.QueueName, true, consumer);
 
             return rpcQueueDeclared;
 
@@ -172,7 +167,9 @@ namespace Mercurio.Messaging
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
                 {
-                    var response = await this.DeserializerService.DeserializeAsync<TResponse>(args.Body.AsStream());
+                    var response = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
+                        .DeserializeAsync<TResponse>(args.Body.AsStream());
+
                     taskCompletionSource.TrySetResult(response);
                 }
             }
@@ -199,7 +196,7 @@ namespace Mercurio.Messaging
             var properties = new BasicProperties
             {
                 Type = typeof(TResponse).Name,
-                ContentType = "application/json"
+                ContentType = this.SerializationProviderService.DefaultFormat
             };
 
             configureProperties?.Invoke(properties);
@@ -212,10 +209,10 @@ namespace Mercurio.Messaging
                 {
                     var taskCompletionSource = new TaskCompletionSource<TResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
                     this.callbacks.TryAdd(correlationId, taskCompletionSource);
-                    rpcQueueDeclared.Channel.CallbackExceptionAsync += ChannelOnCallbackException;
+                    rpcQueueDeclared.ChannelLease.Channel.CallbackExceptionAsync += ChannelOnCallbackException;
 
-                    var serializedBody = await this.SerializerService.SerializeAsync(request, cancellationToken);
-                    await rpcQueueDeclared.Channel.BasicPublishAsync(string.Empty, rpcServerQueueName, true, properties, serializedBody.ToReadOnlyMemory(), cancellationToken);
+                    var serializedBody = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(request, cancellationToken);
+                    await rpcQueueDeclared.ChannelLease.Channel.BasicPublishAsync(string.Empty, rpcServerQueueName, true, properties, serializedBody.ToReadOnlyMemory(), cancellationToken);
 
                     using var cancellationTokenRegistration =
                         cancellationToken.Register(() =>
@@ -248,7 +245,12 @@ namespace Mercurio.Messaging
                     observer.OnError(exception);
                 }
 
-                var disposable = Disposable.Create(() => { rpcQueueDeclared.Channel.CallbackExceptionAsync -= ChannelOnCallbackException; });
+                var disposable = Disposable.Create(() => 
+                { 
+                    rpcQueueDeclared.ChannelLease.Channel.CallbackExceptionAsync -= ChannelOnCallbackException;
+                    rpcQueueDeclared.ChannelLease.Dispose();
+                });
+
                 return Disposable.Create(() => disposable.Dispose());
 
                 Task ChannelOnCallbackException(object sender, CallbackExceptionEventArgs args)
@@ -265,12 +267,12 @@ namespace Mercurio.Messaging
         private sealed class RpcQueueDeclared
         {
             /// <summary>Initializes a new instance of the <see cref="RpcQueueDeclared"></see> class.</summary>
-            /// <param name="channel">The <see cref="IChannel" /> to be used for communication</param>
+            /// <param name="channelLease">The <see cref="ChannelLease" /> that provides the <see cref="IChannel"/> to be used for communication</param>
             /// <param name="queueName">The name of the created queue</param>
             /// <param name="consumerRegistrationDisposable">The specific <see cref="IDisposable" /> tied to the created consumer</param>
-            public RpcQueueDeclared(IChannel channel, string queueName, IDisposable consumerRegistrationDisposable)
+            public RpcQueueDeclared(ChannelLease channelLease, string queueName, IDisposable consumerRegistrationDisposable)
             {
-                this.Channel = channel;
+                this.ChannelLease = channelLease;
                 this.QueueName = queueName;
                 this.ConsumerRegistrationDisposable = consumerRegistrationDisposable;
             }
@@ -278,7 +280,7 @@ namespace Mercurio.Messaging
             /// <summary>
             /// Gets dedicated <see cref="IChannel" />
             /// </summary>
-            public IChannel Channel { get; }
+            public ChannelLease ChannelLease { get; }
 
             /// <summary>
             /// Gets the name of the created queue
