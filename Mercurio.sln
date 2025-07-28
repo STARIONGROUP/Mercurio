@@ -6,6 +6,8 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution Files", "{D3A0C6A1-81ED-4465-AC01-5320683B61A7}"
 	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
+		mercurio-logo.png = mercurio-logo.png
+		mercurio-logo-strapline.png = mercurio-logo-strapline.png
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio", "Mercurio\Mercurio.csproj", "{DFEE1EC8-AEC3-40EE-82D2-B5A4688DC9B3}"

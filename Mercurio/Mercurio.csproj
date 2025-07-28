@@ -24,6 +24,7 @@
         <Authors>Sam Gerené; Nathanael Smiechowski; Alexander Van Delft; Antoine Théate</Authors>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>RabbitMQ</PackageTags>
+        <PackageIcon>mercurio-logo-strapline.png</PackageIcon>
         <PackageReleaseNotes>
             [FIX] Multiple Connection
             [IMP] Channel Reuse using Channel Leasing and Channel Pooling
@@ -43,6 +44,7 @@
 
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\mercurio-logo-strapline.png" Pack="true" PackagePath="" />
     </ItemGroup>
 
     <ItemGroup>
