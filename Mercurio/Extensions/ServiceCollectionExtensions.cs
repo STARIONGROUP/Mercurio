@@ -20,9 +20,10 @@
 
 namespace Mercurio.Extensions
 {
+    using System.Diagnostics;
+
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Provider;
-    using Mercurio.Serializer;
 
     using Microsoft.Extensions.DependencyInjection;
 
@@ -36,7 +37,10 @@ namespace Mercurio.Extensions
         /// <summary>
         /// Registers the <see cref="IRabbitMqConnectionProvider" /> implementation into an <see cref="IServiceCollection" />
         /// </summary>
-        /// <param name="serviceCollection">The <see cref="IServiceCollection" /> that will be used to build the <see cref="IServiceProvider"/></param>
+        /// <param name="serviceCollection">
+        /// The <see cref="IServiceCollection" /> that will be used to build the
+        /// <see cref="IServiceProvider" />
+        /// </param>
         /// <returns>The <see cref="IServiceCollection" /></returns>
         public static IServiceCollection AddRabbitMqConnectionProvider(this IServiceCollection serviceCollection)
         {
@@ -45,28 +49,36 @@ namespace Mercurio.Extensions
         }
 
         /// <summary>
-        /// Registers a new <see cref="ConnectionFactory"/> that have to be initialize asynchronously
+        /// Registers a new <see cref="ConnectionFactory" /> that have to be initialize asynchronously
         /// </summary>
-        /// <param name="serviceCollection">The <see cref="IServiceCollection" /> that will be used to build the <see cref="IServiceProvider"/></param>
-        /// <param name="name">The name of the <see cref="ConnectionFactory"/> that will be used to create connection later</param>
-        /// <param name="factory">The <see cref="Func{T,TResult}"/> that provide <see cref="ConnectionFactory"/> asynchronously initialization behavior</param>
-        /// <returns>The <see cref="IServiceCollection"/></returns>
-        public static IServiceCollection WithRabbitMqConnectionFactoryAsync(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, Task<ConnectionFactory>> factory)
+        /// <param name="serviceCollection">
+        /// The <see cref="IServiceCollection" /> that will be used to build the
+        /// <see cref="IServiceProvider" />
+        /// </param>
+        /// <param name="name">The name of the <see cref="ConnectionFactory" /> that will be used to create connection later</param>
+        /// <param name="factory">The <see cref="Func{T,TResult}" /> that provide <see cref="ConnectionFactory" /> asynchronously initialization behavior</param>
+        /// <param name="activitySourceName">Provides the name that should be use by the <see cref="ActivitySource" /> to provides traceability</param>
+        /// <returns>The <see cref="IServiceCollection" /></returns>
+        public static IServiceCollection WithRabbitMqConnectionFactoryAsync(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, Task<ConnectionFactory>> factory, string activitySourceName = "")
         {
-            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, factory));
+            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, factory, activitySourceName));
             return serviceCollection;
         }
-        
+
         /// <summary>
-        /// Registers a new <see cref="ConnectionFactory"/> that have to be initialize
+        /// Registers a new <see cref="ConnectionFactory" /> that have to be initialize
         /// </summary>
-        /// <param name="serviceCollection">The <see cref="IServiceCollection" /> that will be used to build the <see cref="IServiceProvider"/></param>
-        /// <param name="name">The name of the <see cref="ConnectionFactory"/> that will be used to create connection later</param>
-        /// <param name="factory">The <see cref="Func{T,TResult}"/> that provide <see cref="ConnectionFactory"/> initialization behavior</param>
-        /// <returns>The <see cref="IServiceCollection"/></returns>
-        public static IServiceCollection WithRabbitMqConnectionFactory(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, ConnectionFactory> factory)
+        /// <param name="serviceCollection">
+        /// The <see cref="IServiceCollection" /> that will be used to build the
+        /// <see cref="IServiceProvider" />
+        /// </param>
+        /// <param name="name">The name of the <see cref="ConnectionFactory" /> that will be used to create connection later</param>
+        /// <param name="factory">The <see cref="Func{T,TResult}" /> that provide <see cref="ConnectionFactory" /> initialization behavior</param>
+        /// <param name="activitySourceName">Provides the name that should be use by the <see cref="ActivitySource" /> to provides traceability</param>
+        /// <returns>The <see cref="IServiceCollection" /></returns>
+        public static IServiceCollection WithRabbitMqConnectionFactory(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, ConnectionFactory> factory, string activitySourceName = "")
         {
-            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, sp => Task.FromResult(factory(sp))));
+            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, sp => Task.FromResult(factory(sp)), activitySourceName));
             return serviceCollection;
         }
     }

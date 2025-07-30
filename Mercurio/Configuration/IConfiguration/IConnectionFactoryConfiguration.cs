@@ -20,23 +20,27 @@
 
 namespace Mercurio.Configuration.IConfiguration
 {
+    using System.Diagnostics;
+
     using Mercurio.Provider;
 
     using RabbitMQ.Client;
 
     /// <summary>
-    /// The <see cref="IConnectionFactoryConfiguration" /> provides all required configuration material to be able to register <see cref="RabbitMQ.Client.ConnectionFactory"/>
-    /// into the <see cref="IRabbitMqConnectionProvider"/>
+    /// The <see cref="IConnectionFactoryConfiguration" /> provides all required configuration material to be able to register
+    /// <see cref="RabbitMQ.Client.ConnectionFactory" />
+    /// into the <see cref="IRabbitMqConnectionProvider" />
     /// </summary>
     public interface IConnectionFactoryConfiguration
     {
         /// <summary>
-        /// Gets the name of the <see cref="RabbitMQ.Client.ConnectionFactory" /> 
+        /// Gets the name of the <see cref="RabbitMQ.Client.ConnectionFactory" />
         /// </summary>
         string ConnectionName { get; }
 
         /// <summary>
-        /// Gets the <see cref="Func{T, TResult}"/> that should be invoked to create a <see cref="RabbitMQ.Client.ConnectionFactory"/> asynchronously
+        /// Gets the <see cref="Func{T, TResult}" /> that should be invoked to create a
+        /// <see cref="RabbitMQ.Client.ConnectionFactory" /> asynchronously
         /// </summary>
         Func<IServiceProvider, Task<ConnectionFactory>> ConnectionFactory { get; }
 
@@ -47,5 +51,10 @@ namespace Mercurio.Configuration.IConfiguration
         /// Defaults to 32
         /// </remarks>
         int PoolSize { get; set; }
+
+        /// <summary>
+        /// Gets the name of the <see cref="ActivitySource" /> that should be use for traceabitility
+        /// </summary>
+        string ActivitySourceName { get; }
     }
 }

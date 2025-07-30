@@ -20,13 +20,16 @@
 
 namespace Mercurio.Configuration.IConfiguration
 {
+    using System.Diagnostics;
+
     using Mercurio.Provider;
 
     using RabbitMQ.Client;
 
     /// <summary>
-    /// The <see cref="ConnectionFactoryConfiguration" /> provides all required configuration material to be able to register <see cref="RabbitMQ.Client.ConnectionFactory"/>
-    /// into the <see cref="IRabbitMqConnectionProvider"/>
+    /// The <see cref="ConnectionFactoryConfiguration" /> provides all required configuration material to be able to register
+    /// <see cref="RabbitMQ.Client.ConnectionFactory" />
+    /// into the <see cref="IRabbitMqConnectionProvider" />
     /// </summary>
     internal class ConnectionFactoryConfiguration : IConnectionFactoryConfiguration
     {
@@ -34,8 +37,12 @@ namespace Mercurio.Configuration.IConfiguration
         /// Initializes a new instance of the <see cref="ConnectionFactoryConfiguration"></see> class.
         /// </summary>
         /// <param name="connectionName">The name of the <see cref="RabbitMQ.Client.ConnectionFactory" /> to register</param>
-        /// <param name="connectionFactoryAsync">The <see cref="Func{T, TResult}"/> that should be invoked to create a <see cref="RabbitMQ.Client.ConnectionFactory"/> asynchronously</param>
-        public ConnectionFactoryConfiguration(string connectionName, Func<IServiceProvider, Task<ConnectionFactory>> connectionFactoryAsync)
+        /// <param name="connectionFactoryAsync">
+        /// The <see cref="Func{T, TResult}" /> that should be invoked to create a
+        /// <see cref="RabbitMQ.Client.ConnectionFactory" /> asynchronously
+        /// </param>
+        /// <param name="activitySourceName">Provides the name that should be use by the <see cref="ActivitySource" /> to provides traceability</param>
+        public ConnectionFactoryConfiguration(string connectionName, Func<IServiceProvider, Task<ConnectionFactory>> connectionFactoryAsync, string activitySourceName = "")
         {
             if (string.IsNullOrEmpty(connectionName))
             {
@@ -44,15 +51,22 @@ namespace Mercurio.Configuration.IConfiguration
 
             this.ConnectionName = connectionName;
             this.ConnectionFactory = connectionFactoryAsync ?? throw new ArgumentNullException(nameof(connectionFactoryAsync), "A connection factory must be provided.");
+            this.ActivitySourceName = activitySourceName ?? throw new ArgumentNullException(nameof(activitySourceName), "The activitySource Name can not be null");
         }
 
         /// <summary>
-        /// Gets the name of the <see cref="RabbitMQ.Client.ConnectionFactory" /> 
+        /// Gets the name of the <see cref="ActivitySource" /> that should be use for traceabitility
+        /// </summary>
+        public string ActivitySourceName { get; }
+
+        /// <summary>
+        /// Gets the name of the <see cref="RabbitMQ.Client.ConnectionFactory" />
         /// </summary>
         public string ConnectionName { get; }
 
         /// <summary>
-        /// Gets the <see cref="Func{T, TResult}"/> that should be invoked to create a <see cref="RabbitMQ.Client.ConnectionFactory"/> asynchronously
+        /// Gets the <see cref="Func{T, TResult}" /> that should be invoked to create a
+        /// <see cref="RabbitMQ.Client.ConnectionFactory" /> asynchronously
         /// </summary>
         public Func<IServiceProvider, Task<ConnectionFactory>> ConnectionFactory { get; }
 

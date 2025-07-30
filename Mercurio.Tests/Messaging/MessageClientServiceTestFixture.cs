@@ -30,6 +30,7 @@ namespace Mercurio.Tests.Messaging
     using RabbitMQ.Client;
 
     using System.Collections.Concurrent;
+    using System.Diagnostics;
 
     [TestFixture]
     [Category("Integration")]
@@ -47,6 +48,14 @@ namespace Mercurio.Tests.Messaging
         [SetUp]
         public void Setup()
         {
+            var activityListener = new ActivityListener
+            {
+                ShouldListenTo = _ => true,
+                SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData        
+            };
+            
+            ActivitySource.AddActivityListener(activityListener);
             var serviceCollection = new ServiceCollection();
             
             serviceCollection.AddRabbitMqConnectionProvider()
@@ -61,7 +70,7 @@ namespace Mercurio.Tests.Messaging
                     };
                     
                     return connectionFactory;
-                })
+                }, FirstConnectionName)
                 .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
@@ -73,7 +82,7 @@ namespace Mercurio.Tests.Messaging
                     };
 
                     return connectionFactory;
-                })
+                }, SecondConnectionName)
                 .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
@@ -308,6 +317,36 @@ namespace Mercurio.Tests.Messaging
            {
                Assert.That(taskWithTimeout, Is.Not.EqualTo(invalidListenTask.Task));
                Assert.That(invalidListenTask.Task.Status, Is.EqualTo(TaskStatus.WaitingForActivation));
+           });
+       }
+
+       [Test]
+       public async Task VerifyActivities()
+       {
+           Assert.That(Activity.Current, Is.Null);
+
+           using var newActivity = new Activity("Parent").Start();
+           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannel");
+           var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration, "FirstActivity");
+           var firstTaskCompletion = new TaskCompletionSource<string>();
+           Activity runningActivity = null;
+           
+           listenObservable.Subscribe(message =>
+           {
+               runningActivity = Activity.Current;
+               firstTaskCompletion.TrySetResult(message);
+           });
+           
+           await Task.Delay(TimeOut);
+            
+           await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+           await firstTaskCompletion.Task;
+
+           Assert.Multiple(() =>
+           {
+               Assert.That(runningActivity, Is.Not.Null);
+               Assert.That(runningActivity.OperationName, Is.EqualTo("FirstActivity"));
+               Assert.That(runningActivity.TraceId.ToString(), Is.EqualTo(newActivity.TraceId.ToString()));
            });
        }
     }

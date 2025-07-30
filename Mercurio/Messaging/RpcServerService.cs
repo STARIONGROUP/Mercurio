@@ -20,12 +20,12 @@
 
 namespace Mercurio.Messaging
 {
+    using System.Diagnostics;
     using System.Reactive.Disposables;
 
     using CommunityToolkit.HighPerformance;
 
     using Mercurio.Extensions;
-    using Mercurio.Model;
     using Mercurio.Provider;
     using Mercurio.Serializer;
 
@@ -48,7 +48,7 @@ namespace Mercurio.Messaging
         /// </param>
         /// <param name="serializationService">The injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities</param>
         /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
-        public RpcServerService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationService, ILogger<RpcServerService> logger) 
+        public RpcServerService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationService, ILogger<RpcServerService> logger)
             : base(connectionProvider, serializationService, logger)
         {
         }
@@ -60,6 +60,10 @@ namespace Mercurio.Messaging
         /// <param name="queueName">The name of the listening queue</param>
         /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
@@ -71,7 +75,7 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(queueName))
             {
@@ -83,7 +87,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(onReceiveAsync), "The OnReceiveAsync cannot be null.");
             }
 
-            return this.ListenForRequestInternalAsync(connectionName, queueName, onReceiveAsync, configureProperties, cancellationToken);
+            return this.ListenForRequestInternalAsync(connectionName, queueName, onReceiveAsync, configureProperties, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -93,6 +97,10 @@ namespace Mercurio.Messaging
         /// <param name="queueName">The name of the listening queue</param>
         /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
@@ -100,14 +108,16 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task<IDisposable> ListenForRequestInternalAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task<IDisposable> ListenForRequestInternalAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
             AsyncEventingBasicConsumer consumer = null;
             ChannelLease channelLease = default;
+            ActivitySource activitySource = null;
 
             try
             {
                 channelLease = await this.ConnectionProvider.LeaseChannelAsync(connectionName, cancellationToken);
+                activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
                 await channelLease.Channel.QueueDeclareAsync(queueName, false, false, false, cancellationToken: cancellationToken);
                 await channelLease.Channel.BasicQosAsync(0, 1, false, cancellationToken);
 
@@ -137,7 +147,8 @@ namespace Mercurio.Messaging
 
             async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs args)
             {
-                await this.OnRequestReceivedAsync(sender, args, queueName, onReceiveAsync, configureProperties, cancellationToken);
+                using var _ = this.StartActivity(args, activitySource, activityName);
+                await this.OnRequestReceivedAsync(sender, args, onReceiveAsync, configureProperties, cancellationToken);
             }
         }
 
@@ -146,17 +157,14 @@ namespace Mercurio.Messaging
         /// </summary>
         /// <param name="sender">The original event sender</param>
         /// <param name="args">The <see cref="BasicDeliverEventArgs" /> of the request</param>
-        /// <param name="queueName">The name of the used queue</param>
         /// <param name="onReceiveAsync">The action to perform to compute the <typeparamref name="TResponse" /></param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
         /// <returns>An awaitable <see cref="Task" /></returns>
-        private async Task OnRequestReceivedAsync<TRequest, TResponse>(object sender, BasicDeliverEventArgs args, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task OnRequestReceivedAsync<TRequest, TResponse>(object sender, BasicDeliverEventArgs args, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
-            this.OnMessageReceive(args, new DefaultExchangeConfiguration(queueName));
-
             var request = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
                 .DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
 
@@ -172,13 +180,14 @@ namespace Mercurio.Messaging
             };
 
             configureProperties?.Invoke(properties);
+            IntegrateActivityInformation(properties);
+
             var receivedProperties = args.BasicProperties;
 
             properties.CorrelationId = receivedProperties.CorrelationId;
             var serializedResponse = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(response, cancellationToken);
 
             await exchangeChannel.BasicPublishAsync(string.Empty, receivedProperties.ReplyTo!, true, properties, serializedResponse.ToReadOnlyMemory(), cancellationToken);
-
             await exchangeChannel.BasicAckAsync(args.DeliveryTag, false, cancellationToken);
         }
     }

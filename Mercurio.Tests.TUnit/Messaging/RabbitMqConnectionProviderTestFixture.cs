@@ -49,6 +49,7 @@ namespace Mercurio.Tests.TUnit.Messaging
 
             var mockConfig = new Mock<IConnectionFactoryConfiguration>();
             mockConfig.SetupGet(c => c.ConnectionName).Returns(ConnectionName);
+            mockConfig.Setup(c => c.ActivitySourceName).Returns(string.Empty);
             mockConfig.SetupGet(c => c.PoolSize).Returns(10);
 
             mockConfig.SetupGet(c => c.ConnectionFactory).Returns(_ => Task.FromResult(new ConnectionFactory()));

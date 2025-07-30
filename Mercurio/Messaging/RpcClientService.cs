@@ -21,19 +21,17 @@
 namespace Mercurio.Messaging
 {
     using System.Collections.Concurrent;
+    using System.Diagnostics;
     using System.Reactive.Disposables;
     using System.Reactive.Linq;
 
     using CommunityToolkit.HighPerformance;
 
-    using Mercurio.Configuration.IConfiguration;
-    using Mercurio.Configuration.SerializationConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Provider;
     using Mercurio.Serializer;
 
     using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
 
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
@@ -65,7 +63,7 @@ namespace Mercurio.Messaging
         /// </param>
         /// <param name="serializationService">The injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities</param>
         /// <param name="logger">The injected <see cref="ILogger{TCategoryName}" /></param>
-        public RpcClientService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationService, ILogger<RpcClientService<TResponse>> logger) 
+        public RpcClientService(IRabbitMqConnectionProvider connectionProvider, ISerializationProviderService serializationService, ILogger<RpcClientService<TResponse>> logger)
             : base(connectionProvider, serializationService, logger)
         {
         }
@@ -77,6 +75,10 @@ namespace Mercurio.Messaging
         /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
         /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when the server response has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
@@ -87,7 +89,7 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(connectionName))
             {
@@ -104,7 +106,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(request), "The request message must not be null");
             }
 
-            return this.SendRequestInternalAsync(connectionName, rpcServerQueueName, request, configureProperties, cancellationToken);
+            return this.SendRequestInternalAsync(connectionName, rpcServerQueueName, request, configureProperties, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -137,9 +139,13 @@ namespace Mercurio.Messaging
         /// <summary>
         /// Ensures that the RPC listening queue is declared and initialized correctly to listen on response
         /// </summary>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when the server response has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="connectionName">The name of the connection to use</param>
         /// <returns>An awaitable <see cref="Task{T}" /> that have the <see cref="IChannel" /> to use as response</returns>
-        private async Task<RpcQueueDeclared> EnsureRpcClientIsInitializedAsync(string connectionName)
+        private async Task<RpcQueueDeclared> EnsureRpcClientIsInitializedAsync(string connectionName, string activityName)
         {
             if (this.rpcQueueDeclareds.TryGetValue(connectionName, out var rpcQueue))
             {
@@ -148,6 +154,7 @@ namespace Mercurio.Messaging
 
             var channelLease = await this.ConnectionProvider.LeaseChannelAsync(connectionName);
             var queueDeclare = await channelLease.Channel.QueueDeclareAsync();
+            var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
 
             var consumer = new AsyncEventingBasicConsumer(channelLease.Channel);
 
@@ -163,6 +170,7 @@ namespace Mercurio.Messaging
 
             async Task OnRpcResponseReceivedAsync(object sender, BasicDeliverEventArgs args)
             {
+                using var _ = this.StartActivity(args, activitySource, activityName);
                 var correlationId = args.BasicProperties.CorrelationId;
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
@@ -182,15 +190,19 @@ namespace Mercurio.Messaging
         /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
         /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when the server response has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
         /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json
         /// </remarks>
-        private async Task<IObservable<TResponse>> SendRequestInternalAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task<IObservable<TResponse>> SendRequestInternalAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
-            var rpcQueueDeclared = await this.EnsureRpcClientIsInitializedAsync(connectionName);
+            var rpcQueueDeclared = await this.EnsureRpcClientIsInitializedAsync(connectionName, activityName);
             var correlationId = Guid.NewGuid().ToString();
 
             var properties = new BasicProperties
@@ -202,6 +214,8 @@ namespace Mercurio.Messaging
             configureProperties?.Invoke(properties);
             properties.CorrelationId = correlationId;
             properties.ReplyTo = rpcQueueDeclared.QueueName;
+
+            IntegrateActivityInformation(properties);
 
             return Observable.Create<TResponse>(async observer =>
             {
@@ -245,8 +259,8 @@ namespace Mercurio.Messaging
                     observer.OnError(exception);
                 }
 
-                var disposable = Disposable.Create(() => 
-                { 
+                var disposable = Disposable.Create(() =>
+                {
                     rpcQueueDeclared.ChannelLease.Channel.CallbackExceptionAsync -= ChannelOnCallbackException;
                     rpcQueueDeclared.ChannelLease.Dispose();
                 });
@@ -267,7 +281,7 @@ namespace Mercurio.Messaging
         private sealed class RpcQueueDeclared
         {
             /// <summary>Initializes a new instance of the <see cref="RpcQueueDeclared"></see> class.</summary>
-            /// <param name="channelLease">The <see cref="ChannelLease" /> that provides the <see cref="IChannel"/> to be used for communication</param>
+            /// <param name="channelLease">The <see cref="ChannelLease" /> that provides the <see cref="IChannel" /> to be used for communication</param>
             /// <param name="queueName">The name of the created queue</param>
             /// <param name="consumerRegistrationDisposable">The specific <see cref="IDisposable" /> tied to the created consumer</param>
             public RpcQueueDeclared(ChannelLease channelLease, string queueName, IDisposable consumerRegistrationDisposable)

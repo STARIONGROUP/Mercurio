@@ -20,6 +20,8 @@
 
 namespace Mercurio.Provider
 {
+    using System.Diagnostics;
+
     using Mercurio.Messaging;
 
     using RabbitMQ.Client;
@@ -34,7 +36,7 @@ namespace Mercurio.Provider
         /// Gets an <see cref="IConnection" /> from a name-based registration of <see cref="ConnectionFactory" />
         /// </summary>
         /// <param name="connectionName">The name of the registered connection</param>
-        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/></param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task{TResult}" /> that provides access to an <see cref="IConnection" /></returns>
         Task<IConnection> GetConnectionAsync(string connectionName, CancellationToken cancellationToken = default);
 
@@ -42,8 +44,8 @@ namespace Mercurio.Provider
         /// Asynchronously leases a channel from the pool or creates one if necessary.
         /// </summary>
         /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
-        /// <param name="cancellationToken">An optional <see cref="CancellationToken"/></param>
-        /// <returns>A <see cref="ValueTask{TResult}"/> of <see cref="ChannelLease"/></returns>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
         ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default);
 
         /// <summary>
@@ -52,5 +54,16 @@ namespace Mercurio.Provider
         /// <param name="name">The registration name that should be used</param>
         /// <param name="factory">A <see cref="Func{T,TResult}" /> that defines how the <see cref="ConnectionFactory" /> can be initialized</param>
         void RegisterFactory(string name, Func<IServiceProvider, Task<ConnectionFactory>> factory);
+
+        /// <summary>
+        /// Gets an <see cref="ActivitySource" /> to be used for a specific connection, to provides traceability
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException">
+        /// If none <see cref="ActivitySource" /> has been created for the provided connection name, meaning that no
+        /// <see cref="ConnectionFactory" /> has been registered
+        /// </exception>
+        ActivitySource GetRegisteredActivitySource(string connectionName);
     }
 }
