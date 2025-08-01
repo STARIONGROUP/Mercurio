@@ -210,8 +210,12 @@ namespace Mercurio.Messaging
         /// <param name="message">The received <see cref="BasicDeliverEventArgs" /></param>
         /// <param name="activitySource">The <see cref="ActivitySource" /> that will starts the <see cref="Activity" /></param>
         /// <param name="activityName">The name of the <see cref="Activity" /> to start. If null or empty, the process is ignored.</param>
+        /// <param name="activityKind">
+        /// The <see cref="ActivityKind" /> that should be set on the started <see cref="Activity" />. By default,
+        /// <see cref="ActivityKind.Consumer" />
+        /// </param>
         /// <returns>The started <see cref="Activity" /></returns>
-        protected Activity StartActivity(BasicDeliverEventArgs message, ActivitySource activitySource, string activityName)
+        protected Activity StartActivity(BasicDeliverEventArgs message, ActivitySource activitySource, string activityName, ActivityKind activityKind = ActivityKind.Consumer)
         {
             if (string.IsNullOrEmpty(activityName))
             {
@@ -219,12 +223,12 @@ namespace Mercurio.Messaging
             }
 
             var traceState = message.BasicProperties.TryReadHeader(TraceStateHeaderKey, out string state) ? state : null;
-            
+
             var context = message.BasicProperties.TryReadHeader(TraceParentHeaderKey, out string parent)
                 ? ActivityContext.Parse(parent, traceState)
                 : default;
 
-            var activity = activitySource.StartActivity(activityName, ActivityKind.Consumer, context);
+            var activity = activitySource.StartActivity(activityName, activityKind, context);
 
             if (activity is null)
             {

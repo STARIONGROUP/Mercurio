@@ -170,7 +170,7 @@ namespace Mercurio.Messaging
 
             async Task OnRpcResponseReceivedAsync(object sender, BasicDeliverEventArgs args)
             {
-                using var _ = this.StartActivity(args, activitySource, activityName);
+                using var _ = this.StartActivity(args, activitySource, activityName, ActivityKind.Client);
                 var correlationId = args.BasicProperties.CorrelationId;
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
