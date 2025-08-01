@@ -367,5 +367,50 @@ namespace Mercurio.Tests.Messaging
                }
            }
        }
+       
+       [Test]
+       public async Task VerifyActivitiesMultipleMessages()
+       {
+           Assert.That(Activity.Current, Is.Null);
+           var activities = new HashSet<Activity>();
+           Activity.CurrentChanged += ActivityOnCurrentChanged;
+           
+           var activitySource = new ActivitySource("Local");
+           using var newActivity = activitySource.StartActivity("Parent", ActivityKind.Consumer, null);
+           activities.Add(newActivity);
+           
+           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForActivity");
+           var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
+           var firstTaskCompletion = new TaskCompletionSource<string>();
+           
+           using var _ = listenObservable.Subscribe(message =>
+           {
+               firstTaskCompletion.TrySetResult(message);
+           });
+           
+           await Task.Delay(TimeOut);
+            
+           await this.secondService.PushAsync(SecondConnectionName, [FirstSentMessage,SecondSentMessage], exchangeConfiguration, activityName: "Push request");
+           await firstTaskCompletion.Task;
+
+           Assert.Multiple(() =>
+           { 
+               Assert.That(activities, Has.Count.EqualTo(4));
+               Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
+               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
+               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Push request [1/2]"));
+               Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Push request [2/2]"));
+           });
+           
+           Activity.CurrentChanged -= ActivityOnCurrentChanged;
+            
+           void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
+           {
+               if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+               {
+                   activities.Add(e.Current!);
+               }
+           }
+       }
     }
 }
