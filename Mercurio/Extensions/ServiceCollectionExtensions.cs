@@ -57,11 +57,11 @@ namespace Mercurio.Extensions
         /// </param>
         /// <param name="name">The name of the <see cref="ConnectionFactory" /> that will be used to create connection later</param>
         /// <param name="factory">The <see cref="Func{T,TResult}" /> that provide <see cref="ConnectionFactory" /> asynchronously initialization behavior</param>
-        /// <param name="activitySourceName">Provides the name that should be use by the <see cref="ActivitySource" /> to provides traceability</param>
+        /// <param name="activitySource">Provides an optional <see cref="ActivitySource" /> to be used for traceability. In case of null, no traceability will be sent</param>
         /// <returns>The <see cref="IServiceCollection" /></returns>
-        public static IServiceCollection WithRabbitMqConnectionFactoryAsync(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, Task<ConnectionFactory>> factory, string activitySourceName = "")
+        public static IServiceCollection WithRabbitMqConnectionFactoryAsync(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, Task<ConnectionFactory>> factory, ActivitySource activitySource = null)
         {
-            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, factory, activitySourceName));
+            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, factory, activitySource));
             return serviceCollection;
         }
 
@@ -74,11 +74,12 @@ namespace Mercurio.Extensions
         /// </param>
         /// <param name="name">The name of the <see cref="ConnectionFactory" /> that will be used to create connection later</param>
         /// <param name="factory">The <see cref="Func{T,TResult}" /> that provide <see cref="ConnectionFactory" /> initialization behavior</param>
-        /// <param name="activitySourceName">Provides the name that should be use by the <see cref="ActivitySource" /> to provides traceability</param>
+        /// <param name="activitySource">Provides an optional <see cref="ActivitySource" /> to be used for traceability. In case of null, no traceability will be sent</param>
+        /// ///
         /// <returns>The <see cref="IServiceCollection" /></returns>
-        public static IServiceCollection WithRabbitMqConnectionFactory(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, ConnectionFactory> factory, string activitySourceName = "")
+        public static IServiceCollection WithRabbitMqConnectionFactory(this IServiceCollection serviceCollection, string name, Func<IServiceProvider, ConnectionFactory> factory, ActivitySource activitySource = null)
         {
-            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, sp => Task.FromResult(factory(sp)), activitySourceName));
+            serviceCollection.AddSingleton<IConnectionFactoryConfiguration>(new ConnectionFactoryConfiguration(name, sp => Task.FromResult(factory(sp)), activitySource));
             return serviceCollection;
         }
     }

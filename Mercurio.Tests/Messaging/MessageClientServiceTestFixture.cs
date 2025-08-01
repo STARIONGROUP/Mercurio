@@ -70,7 +70,7 @@ namespace Mercurio.Tests.Messaging
                     };
                     
                     return connectionFactory;
-                }, FirstConnectionName)
+                }, new ActivitySource(FirstConnectionName))
                 .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
@@ -82,7 +82,7 @@ namespace Mercurio.Tests.Messaging
                     };
 
                     return connectionFactory;
-                }, SecondConnectionName)
+                },  new ActivitySource(SecondConnectionName))
                 .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
@@ -328,31 +328,44 @@ namespace Mercurio.Tests.Messaging
        public async Task VerifyActivities()
        {
            Assert.That(Activity.Current, Is.Null);
-
+           var activities = new HashSet<Activity>();
+           Activity.CurrentChanged += ActivityOnCurrentChanged;
+           
            var activitySource = new ActivitySource("Local");
            using var newActivity = activitySource.StartActivity("Parent", ActivityKind.Consumer, null);
+           activities.Add(newActivity);
+           
            var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForActivity");
            var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration, "FirstActivity");
            var firstTaskCompletion = new TaskCompletionSource<string>();
-           Activity runningActivity = null;
            
            using var _ = listenObservable.Subscribe(message =>
            {
-               runningActivity = Activity.Current;
                firstTaskCompletion.TrySetResult(message);
            });
            
            await Task.Delay(TimeOut);
             
-           await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+           await this.secondService.PushAsync(SecondConnectionName, FirstSentMessage, exchangeConfiguration, activityName: "Push request");
            await firstTaskCompletion.Task;
 
            Assert.Multiple(() =>
            {
-               Assert.That(runningActivity, Is.Not.Null);
-               Assert.That(runningActivity.OperationName, Is.EqualTo("FirstActivity"));
-               Assert.That(runningActivity.TraceId.ToString(), Is.EqualTo(newActivity!.TraceId.ToString()));
+               Assert.That(activities, Has.Count.EqualTo(3));
+               Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
+               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
+               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("FirstActivity"));
            });
+           
+           Activity.CurrentChanged -= ActivityOnCurrentChanged;
+            
+           void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
+           {
+               if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+               {
+                   activities.Add(e.Current!);
+               }
+           }
        }
     }
 }

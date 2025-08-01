@@ -111,7 +111,7 @@ namespace Mercurio.Provider
             {
                 this.registeredFactoriesPoolSize[configuration.ConnectionName] = configuration.PoolSize;
                 this.RegisterFactory(configuration.ConnectionName, configuration.ConnectionFactory);
-                this.RegisterActivitySource(configuration.ConnectionName, configuration.ActivitySourceName);
+                this.RegisterActivitySource(configuration.ConnectionName, configuration.ActivitySource);
             }
         }
 
@@ -150,7 +150,7 @@ namespace Mercurio.Provider
 
             foreach (var activitySource in this.activitySources.Select(x => x.Value).Distinct())
             {
-                activitySource.Dispose();
+                activitySource?.Dispose();
             }
 
             this.connections.Clear();
@@ -257,10 +257,10 @@ namespace Mercurio.Provider
         /// Register a new <see cref="ActivitySource" /> that should be used for traceability per connection
         /// </summary>
         /// <param name="connectionName">The name of the connection</param>
-        /// <param name="activitySourceName">The name of the <see cref="ActivitySource" /></param>
-        private void RegisterActivitySource(string connectionName, string activitySourceName)
+        /// <param name="activitySource">The <see cref="ActivitySource" /> that shoulld be used</param>
+        private void RegisterActivitySource(string connectionName, ActivitySource activitySource)
         {
-            this.activitySources.TryAdd(connectionName, this.activitySources.TryGetValue(connectionName, out var existingActivitySource) ? existingActivitySource : new ActivitySource(activitySourceName));
+            this.activitySources[connectionName] = activitySource;
         }
 
         /// <summary>

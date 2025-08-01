@@ -18,23 +18,29 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
+using ThrowsExtensions = TUnit.Assertions.AssertConditions.Throws.ThrowsExtensions;
+
 namespace Mercurio.Tests.TUnit.Messaging
 {
-    using global::TUnit.Assertions.AssertConditions.Throws;
+    using System.Diagnostics;
+
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Provider;
+
     using Microsoft.Extensions.Options;
+
     using Moq;
+
     using RabbitMQ.Client;
 
     public class RabbitMqConnectionProviderTestFixture
     {
-        private RabbitMqConnectionProvider service;
-        private Mock<IConnection> connection;
-        private Mock<IChannel> channel;
         private const string ConnectionName = "TestConnection";
+        private Mock<IChannel> channel;
+        private Mock<IConnection> connection;
+        private RabbitMqConnectionProvider service;
 
-        [Before(HookType.Test)]
+        [Before(Test)]
         public async Task Setup()
         {
             var mockServiceProvider = new Mock<IServiceProvider>();
@@ -49,18 +55,18 @@ namespace Mercurio.Tests.TUnit.Messaging
 
             var mockConfig = new Mock<IConnectionFactoryConfiguration>();
             mockConfig.SetupGet(c => c.ConnectionName).Returns(ConnectionName);
-            mockConfig.Setup(c => c.ActivitySourceName).Returns(string.Empty);
+            mockConfig.Setup(c => c.ActivitySource).Returns((ActivitySource)null);
             mockConfig.SetupGet(c => c.PoolSize).Returns(10);
 
             mockConfig.SetupGet(c => c.ConnectionFactory).Returns(_ => Task.FromResult(new ConnectionFactory()));
 
-           this.service = new RabbitMqConnectionProvider(null, mockServiceProvider.Object, [mockConfig.Object],
+            this.service = new RabbitMqConnectionProvider(null, mockServiceProvider.Object, [mockConfig.Object],
                 Options.Create(new RetryPolicyConfiguration { MaxConnectionRetryAttempts = 1 }));
 
             await Task.CompletedTask;
         }
 
-        [After(HookType.Test)]
+        [After(Test)]
         public async Task Teardown()
         {
             this.service.Dispose();
@@ -77,7 +83,7 @@ namespace Mercurio.Tests.TUnit.Messaging
             await using (var lease = await this.service.LeaseChannelAsync(ConnectionName))
             {
                 oldLeaseChannel = lease.Channel;
-                
+
                 await Assert.That(lease).IsNotDefault();
                 await Assert.That(lease.Channel).IsNotDefault();
                 await Assert.That(lease.Channel.IsOpen).IsTrue();
@@ -91,7 +97,7 @@ namespace Mercurio.Tests.TUnit.Messaging
         [Test]
         public async Task Should_Throw_When_Connection_Not_Registered()
         {
-            await Assert.That(() => this.service.GetConnectionAsync("Unregistered")).Throws<ArgumentException>();
+            await ThrowsExtensions.Throws<ArgumentException>(Assert.That(() => this.service.GetConnectionAsync("Unregistered")));
         }
     }
 }

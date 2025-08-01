@@ -47,16 +47,6 @@ namespace Mercurio.Messaging
     public class MessageClientService : MessageClientBaseService
     {
         /// <summary>
-        /// The header key used for the traceparent value in the message headers.
-        /// </summary>
-        protected const string TraceParentHeaderKey = "traceparent";
-
-        /// <summary>
-        /// The header key used for the tracestate value in the message headers.
-        /// </summary>
-        protected const string TraceStateHeaderKey = "tracestate";
-
-        /// <summary>
         /// Gets the injected <see cref="ISerializationProviderService" /> that will provide message serialization and deserialization capabilities
         /// </summary>
         protected readonly ISerializationProviderService SerializationProviderService;
@@ -129,20 +119,25 @@ namespace Mercurio.Messaging
         /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (messages == null)
             {
                 throw new ArgumentException("The messages collection cannot be null", nameof(messages));
             }
 
-            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, cancellationToken);
+            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -154,6 +149,11 @@ namespace Mercurio.Messaging
         /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -161,7 +161,7 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (Equals(message, default(TMessage)))
             {
@@ -173,71 +173,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
 
-            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
-        }
-
-        /// <summary>
-        /// Adds current <see cref="Activity" />'s information into the <paramref name="properties" /> headers
-        /// </summary>
-        /// <param name="properties">The <see cref="BasicProperties" /> that will hold <see cref="Activity" />'s information</param>
-        protected static void IntegrateActivityInformation(BasicProperties properties)
-        {
-            if (Activity.Current == null || Activity.Current.IsStopped)
-            {
-                return;
-            }
-
-            if (!properties.IsHeadersPresent())
-            {
-                properties.Headers = new Dictionary<string, object>();
-            }
-
-            if (!string.IsNullOrEmpty(Activity.Current.Id))
-            {
-                properties.Headers[TraceParentHeaderKey] = Activity.Current.Id;
-            }
-
-            if (!string.IsNullOrEmpty(Activity.Current.TraceStateString))
-            {
-                properties.Headers[TraceStateHeaderKey] = Activity.Current.TraceStateString;
-            }
-        }
-
-        /// <summary>
-        /// Starts a new <see cref="Activity" /> from the provided <paramref name="activitySource" /> defined by the
-        /// <paramref name="activityName" />
-        /// </summary>
-        /// <param name="message">The received <see cref="BasicDeliverEventArgs" /></param>
-        /// <param name="activitySource">The <see cref="ActivitySource" /> that will starts the <see cref="Activity" /></param>
-        /// <param name="activityName">The name of the <see cref="Activity" /> to start. If null or empty, the process is ignored.</param>
-        /// <param name="activityKind">
-        /// The <see cref="ActivityKind" /> that should be set on the started <see cref="Activity" />. By default,
-        /// <see cref="ActivityKind.Consumer" />
-        /// </param>
-        /// <returns>The started <see cref="Activity" /></returns>
-        protected Activity StartActivity(BasicDeliverEventArgs message, ActivitySource activitySource, string activityName, ActivityKind activityKind = ActivityKind.Consumer)
-        {
-            if (string.IsNullOrEmpty(activityName))
-            {
-                return null;
-            }
-
-            var traceState = message.BasicProperties.TryReadHeader(TraceStateHeaderKey, out string state) ? state : null;
-
-            var context = message.BasicProperties.TryReadHeader(TraceParentHeaderKey, out string parent)
-                ? ActivityContext.Parse(parent, traceState)
-                : default;
-
-            var activity = activitySource.StartActivity(activityName, activityKind, context);
-
-            if (activity is null)
-            {
-                return null;
-            }
-
-            this.Logger.LogTrace("{ActivityName} started!", activityName);
-
-            return activity;
+            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -335,17 +271,30 @@ namespace Mercurio.Messaging
         /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
-            foreach (var message in messages)
+            var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
+            var context = Activity.Current == null ? default : Activity.Current.Context;
+            using var activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
+
+            var messagesList = messages.ToList();
+            var messageIndex = 1;
+
+            foreach (var message in messagesList)
             {
-                await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
+                var subActivityName = activity == null ? null : $"{activityName} [{messageIndex++}/{messagesList.Count}]";
+                await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, subActivityName, cancellationToken);
             }
         }
 
@@ -358,6 +307,11 @@ namespace Mercurio.Messaging
         /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -365,7 +319,7 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
             try
             {
@@ -381,7 +335,11 @@ namespace Mercurio.Messaging
 
                 configureProperties?.Invoke(properties);
 
-                IntegrateActivityInformation(properties);
+                var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
+                var context = Activity.Current == null ? default : Activity.Current.Context;
+                using var activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
+                IntegrateActivityInformation(properties, activity);
+
                 var stream = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(message, cancellationToken);
 
                 var routingKey = !string.IsNullOrEmpty(exchangeConfiguration.RoutingKey) || !string.IsNullOrEmpty(exchangeConfiguration.ExchangeName)

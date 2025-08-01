@@ -41,8 +41,8 @@ namespace Mercurio.Configuration.IConfiguration
         /// The <see cref="Func{T, TResult}" /> that should be invoked to create a
         /// <see cref="RabbitMQ.Client.ConnectionFactory" /> asynchronously
         /// </param>
-        /// <param name="activitySourceName">Provides the name that should be use by the <see cref="ActivitySource" /> to provides traceability</param>
-        public ConnectionFactoryConfiguration(string connectionName, Func<IServiceProvider, Task<ConnectionFactory>> connectionFactoryAsync, string activitySourceName = "")
+        /// <param name="activitySource">Provides the <see cref="ActivitySource" /> that should be used tto provides traceability. If null, no traceability will be done.</param>
+        public ConnectionFactoryConfiguration(string connectionName, Func<IServiceProvider, Task<ConnectionFactory>> connectionFactoryAsync, ActivitySource activitySource = null)
         {
             if (string.IsNullOrEmpty(connectionName))
             {
@@ -51,13 +51,13 @@ namespace Mercurio.Configuration.IConfiguration
 
             this.ConnectionName = connectionName;
             this.ConnectionFactory = connectionFactoryAsync ?? throw new ArgumentNullException(nameof(connectionFactoryAsync), "A connection factory must be provided.");
-            this.ActivitySourceName = activitySourceName ?? throw new ArgumentNullException(nameof(activitySourceName), "The activitySource Name can not be null");
+            this.ActivitySource = activitySource;
         }
 
         /// <summary>
-        /// Gets the name of the <see cref="ActivitySource" /> that should be use for traceabitility
+        /// Gets the <see cref="ActivitySource" /> that should be used for traceability
         /// </summary>
-        public string ActivitySourceName { get; }
+        public ActivitySource ActivitySource { get; }
 
         /// <summary>
         /// Gets the name of the <see cref="RabbitMQ.Client.ConnectionFactory" />

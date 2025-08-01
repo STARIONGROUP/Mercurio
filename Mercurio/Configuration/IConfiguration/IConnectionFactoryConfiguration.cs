@@ -53,8 +53,8 @@ namespace Mercurio.Configuration.IConfiguration
         int PoolSize { get; set; }
 
         /// <summary>
-        /// Gets the name of the <see cref="ActivitySource" /> that should be use for traceabitility
+        /// Gets the <see cref="ActivitySource" /> that should be used for traceability
         /// </summary>
-        string ActivitySourceName { get; }
+        public ActivitySource ActivitySource { get; }
     }
 }

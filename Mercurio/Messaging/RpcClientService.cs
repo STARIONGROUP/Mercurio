@@ -170,11 +170,12 @@ namespace Mercurio.Messaging
 
             async Task OnRpcResponseReceivedAsync(object sender, BasicDeliverEventArgs args)
             {
-                using var _ = this.StartActivity(args, activitySource, activityName, ActivityKind.Client);
                 var correlationId = args.BasicProperties.CorrelationId;
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
                 {
+                    using var _ = this.StartActivity(args, activitySource, activityName, ActivityKind.Client);
+
                     var response = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
                         .DeserializeAsync<TResponse>(args.Body.AsStream());
 
@@ -215,8 +216,6 @@ namespace Mercurio.Messaging
             properties.CorrelationId = correlationId;
             properties.ReplyTo = rpcQueueDeclared.QueueName;
 
-            IntegrateActivityInformation(properties);
-
             return Observable.Create<TResponse>(async observer =>
             {
                 try
@@ -224,6 +223,10 @@ namespace Mercurio.Messaging
                     var taskCompletionSource = new TaskCompletionSource<TResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
                     this.callbacks.TryAdd(correlationId, taskCompletionSource);
                     rpcQueueDeclared.ChannelLease.Channel.CallbackExceptionAsync += ChannelOnCallbackException;
+                    var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
+                    var context = Activity.Current == null ? default : Activity.Current.Context;
+                    using var activity = this.StartActivity(activitySource, context, $"{activityName} - Request", ActivityKind.Client);
+                    IntegrateActivityInformation(properties, activity);
 
                     var serializedBody = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(request, cancellationToken);
                     await rpcQueueDeclared.ChannelLease.Channel.BasicPublishAsync(string.Empty, rpcServerQueueName, true, properties, serializedBody.ToReadOnlyMemory(), cancellationToken);

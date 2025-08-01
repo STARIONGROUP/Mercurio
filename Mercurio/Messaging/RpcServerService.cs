@@ -147,8 +147,8 @@ namespace Mercurio.Messaging
 
             async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs args)
             {
-                using var _ = this.StartActivity(args, activitySource, activityName, ActivityKind.Server);
-                await this.OnRequestReceivedAsync(sender, args, onReceiveAsync, configureProperties, cancellationToken);
+                using var activity = this.StartActivity(args, activitySource, activityName, ActivityKind.Server);
+                await this.OnRequestReceivedAsync(sender, args, onReceiveAsync, configureProperties, activity, cancellationToken);
             }
         }
 
@@ -159,11 +159,12 @@ namespace Mercurio.Messaging
         /// <param name="args">The <see cref="BasicDeliverEventArgs" /> of the request</param>
         /// <param name="onReceiveAsync">The action to perform to compute the <typeparamref name="TResponse" /></param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activity">The started <see cref="Activity" /></param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
         /// <returns>An awaitable <see cref="Task" /></returns>
-        private async Task OnRequestReceivedAsync<TRequest, TResponse>(object sender, BasicDeliverEventArgs args, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task OnRequestReceivedAsync<TRequest, TResponse>(object sender, BasicDeliverEventArgs args, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, Activity activity, CancellationToken cancellationToken)
         {
             var request = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
                 .DeserializeAsync<TRequest>(args.Body.AsStream(), cancellationToken);
@@ -180,7 +181,7 @@ namespace Mercurio.Messaging
             };
 
             configureProperties?.Invoke(properties);
-            IntegrateActivityInformation(properties);
+            IntegrateActivityInformation(properties, activity);
 
             var receivedProperties = args.BasicProperties;
 

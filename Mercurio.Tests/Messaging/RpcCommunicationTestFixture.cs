@@ -68,7 +68,7 @@ namespace Mercurio.Tests.Messaging
                     };
                     
                     return connectionFactory;
-                }, FirstConnectionName)
+                }, new ActivitySource(FirstConnectionName))
                 .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
@@ -80,7 +80,7 @@ namespace Mercurio.Tests.Messaging
                     };
                     
                     return connectionFactory;
-                }, SecondConnectionName)
+                }, new ActivitySource(SecondConnectionName))
                 .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
@@ -137,10 +137,11 @@ namespace Mercurio.Tests.Messaging
 
             Assert.Multiple(() =>
             {
-                Assert.That(activities, Has.Count.EqualTo(3));
+                Assert.That(activities, Has.Count.EqualTo(4));
                 Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
-                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Server"));
-                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Client"));
+                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Client - Request"));
+                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Server"));
+                Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Client"));
 
                 foreach (var activity in activities)
                 {
@@ -153,7 +154,7 @@ namespace Mercurio.Tests.Messaging
             
             void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
             {
-                if (e.Current != null && (e.Current.Source.Name == FirstConnectionName || e.Current.Source.Name == SecondConnectionName))
+                if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
                 {
                     activities.Add(e.Current!);
                 }

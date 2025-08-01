@@ -92,7 +92,7 @@ namespace Mercurio.Tests.Messaging
                     };
 
                     return connectionFactory;
-                }, FirstConnectionName)
+                }, new ActivitySource(FirstConnectionName))
                 .WithRabbitMqConnectionFactory(SecondConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
@@ -104,7 +104,7 @@ namespace Mercurio.Tests.Messaging
                     };
 
                     return connectionFactory;
-                }, SecondConnectionName)
+                }, new ActivitySource(SecondConnectionName))
                 .WithSerialization();
             
             builder.Services.AddTransient<IRpcServerService,RpcServerService>();

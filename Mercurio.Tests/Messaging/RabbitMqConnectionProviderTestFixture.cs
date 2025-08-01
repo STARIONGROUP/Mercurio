@@ -20,6 +20,8 @@
 
 namespace Mercurio.Tests.Messaging
 {
+    using System.Diagnostics;
+
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Provider;
 
@@ -53,7 +55,7 @@ namespace Mercurio.Tests.Messaging
 
             var mockConfig = new Mock<IConnectionFactoryConfiguration>();
             mockConfig.Setup(c => c.ConnectionName).Returns(ConnectionName);
-            mockConfig.Setup(c => c.ActivitySourceName).Returns(string.Empty);
+            mockConfig.Setup(c => c.ActivitySource).Returns((ActivitySource)null);
             mockConfig.Setup(c => c.PoolSize).Returns(10);
 
             mockConfig.Setup(c => c.ConnectionFactory)
