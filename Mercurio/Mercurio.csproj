@@ -44,6 +44,7 @@
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\"/>
         <None Include="..\mercurio-logo-strapline.png" Pack="true" PackagePath=""/>
+        <None Include="..\mercurio-logo-nugget.png" Pack="true" PackagePath=""/>
     </ItemGroup>
 
     <ItemGroup>
