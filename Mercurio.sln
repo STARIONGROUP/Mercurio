@@ -8,11 +8,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution 
 		README.md = README.md
 		mercurio-logo.png = mercurio-logo.png
 		mercurio-logo-strapline.png = mercurio-logo-strapline.png
+		mercurio-logo-nugget.png = mercurio-logo-nugget.png
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio", "Mercurio\Mercurio.csproj", "{DFEE1EC8-AEC3-40EE-82D2-B5A4688DC9B3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Tests", "Mercurio.Tests\Mercurio.Tests.csproj", "{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Tests.TUnit", "Mercurio.Tests.TUnit\Mercurio.Tests.TUnit.csproj", "{A2D193D1-101C-4A44-93F6-FE07450B2921}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,6 +31,10 @@ Global
 		{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{43A1B6B2-0D1E-4235-80E7-14C65294F8DF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

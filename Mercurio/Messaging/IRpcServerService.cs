@@ -20,10 +20,12 @@
 
 namespace Mercurio.Messaging
 {
+    using System.Diagnostics;
+
     using RabbitMQ.Client;
 
     /// <summary>
-    /// The <see cref="IRpcServerService"/> provides Server implementation of the RPC protocol of RabbitMQ
+    /// The <see cref="IRpcServerService" /> provides Server implementation of the RPC protocol of RabbitMQ
     /// </summary>
     public interface IRpcServerService
     {
@@ -34,6 +36,10 @@ namespace Mercurio.Messaging
         /// <param name="queueName">The name of the listening queue</param>
         /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
@@ -45,6 +51,6 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+        Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default);
     }
 }

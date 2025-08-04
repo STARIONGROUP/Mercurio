@@ -21,6 +21,7 @@
 namespace Mercurio.Provider
 {
     using System.Collections.Concurrent;
+    using System.Diagnostics;
 
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Messaging;
@@ -38,6 +39,11 @@ namespace Mercurio.Provider
     /// </summary>
     internal sealed class RabbitMqConnectionProvider : IRabbitMqConnectionProvider, IDisposable
     {
+        /// <summary>
+        /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}" /> that caches <see cref="ActivitySource" /> that will provides traceabilities per connection
+        /// </summary>
+        private readonly ConcurrentDictionary<string, ActivitySource> activitySources = new();
+
         /// <summary>
         /// The <see cref="ThreadLocal{IChannel}" /> that holds the current channel for the thread.
         /// </summary>
@@ -105,6 +111,7 @@ namespace Mercurio.Provider
             {
                 this.registeredFactoriesPoolSize[configuration.ConnectionName] = configuration.PoolSize;
                 this.RegisterFactory(configuration.ConnectionName, configuration.ConnectionFactory);
+                this.RegisterActivitySource(configuration.ConnectionName, configuration.ActivitySource);
             }
         }
 
@@ -132,13 +139,18 @@ namespace Mercurio.Provider
                     foreach (var channel in disposablePool)
                     {
                         channel.Dispose();
-                    }    
+                    }
                 }
 
                 if (this.poolGates.TryGetValue(existingConnection.Key, out var poolGate))
                 {
                     poolGate.Dispose();
                 }
+            }
+
+            foreach (var activitySource in this.activitySources.Select(x => x.Value).Distinct())
+            {
+                activitySource?.Dispose();
             }
 
             this.connections.Clear();
@@ -220,6 +232,35 @@ namespace Mercurio.Provider
         void ICanReleaseChannel.ReleaseChannel(string connectionName, IChannel channel)
         {
             this.ReleaseChannel(connectionName, channel);
+        }
+
+        /// <summary>
+        /// Gets an <see cref="ActivitySource" /> to be used for a specific connection, to provides traceability
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException">
+        /// If none <see cref="ActivitySource" /> has been created for the provided connection name, meaning that no
+        /// <see cref="ConnectionFactory" /> has been registered
+        /// </exception>
+        public ActivitySource GetRegisteredActivitySource(string connectionName)
+        {
+            if (!this.activitySources.TryGetValue(connectionName, out var activitySource))
+            {
+                throw new ArgumentException($"None ActivitySource has been registered for the name {connectionName}", nameof(connectionName));
+            }
+
+            return activitySource;
+        }
+
+        /// <summary>
+        /// Register a new <see cref="ActivitySource" /> that should be used for traceability per connection
+        /// </summary>
+        /// <param name="connectionName">The name of the connection</param>
+        /// <param name="activitySource">The <see cref="ActivitySource" /> that shoulld be used</param>
+        private void RegisterActivitySource(string connectionName, ActivitySource activitySource)
+        {
+            this.activitySources[connectionName] = activitySource;
         }
 
         /// <summary>

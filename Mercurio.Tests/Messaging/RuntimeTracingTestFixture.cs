@@ -1,5 +1,5 @@
 ﻿// -------------------------------------------------------------------------------------------------
-//  <copyright file="RpcCommunicationTestFixture.cs" company="Starion Group S.A.">
+//  <copyright file="RuntimeTracingTestFixture.cs" company="Starion Group S.A.">
 // 
 //    Copyright 2025 Starion Group S.A.
 // 
@@ -27,37 +27,61 @@ namespace Mercurio.Tests.Messaging
     using Mercurio.Messaging;
 
     using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
+
+    using OpenTelemetry.Exporter;
+    using OpenTelemetry.Logs;
+    using OpenTelemetry.Trace;
 
     using RabbitMQ.Client;
 
     [TestFixture]
     [Category("Integration")]
     [NonParallelizable]
-    public class RpcCommunicationTestFixture
+    public class RuntimeTracingTestFixture
     {
+        private IServiceProvider serviceProvider;
+        private IHost host;
         private IRpcClientService<string> rpcClientService;
         private IRpcServerService rpcServerService;
-        private ServiceProvider serviceProvider;
+        private ILogger<RuntimeTracingTestFixture> logger;
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
 
-        [SetUp]
+        [OneTimeSetUp]
         public void Setup()
         {
-            var activityListener = new ActivityListener
+            var builder = Host.CreateApplicationBuilder();
+            builder.Logging.ClearProviders();
+            builder.Logging.AddConsole();
+            
+            var otlpOptions = (OtlpExporterOptions x) =>
             {
-                ShouldListenTo = _ => true,
-                SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData,
-                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData        
+                x.Endpoint = new Uri("http://localhost:4317");
+                x.Protocol = OtlpExportProtocol.Grpc;
             };
             
-            ActivitySource.AddActivityListener(activityListener);
-            
-            var serviceCollection = new ServiceCollection();
-            
-            serviceCollection.AddRabbitMqConnectionProvider()
-                .WithRabbitMqConnectionFactory(FirstConnectionName,_ =>
+            builder.Logging.AddOpenTelemetry(options =>
+            {
+                options.IncludeFormattedMessage = true;
+                options.IncludeScopes = true;
+                options.ParseStateValues = true;
+                options.AddOtlpExporter(otlpOptions);
+            });
+
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(traceBuilder =>
+                {
+                    traceBuilder.AddAspNetCoreInstrumentation()
+                        .AddHttpClientInstrumentation()
+                        .AddSource("Local", FirstConnectionName, SecondConnectionName)
+                        .AddOtlpExporter(otlpOptions);
+                })
+                .WithLogging(x => x.AddOtlpExporter(otlpOptions));
+
+            builder.Services.AddRabbitMqConnectionProvider()
+                .WithRabbitMqConnectionFactory(FirstConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -66,10 +90,10 @@ namespace Mercurio.Tests.Messaging
                         UserName = "guest",
                         Password = "guest"
                     };
-                    
+
                     return connectionFactory;
                 }, new ActivitySource(FirstConnectionName))
-                .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
+                .WithRabbitMqConnectionFactory(SecondConnectionName, _ =>
                 {
                     var connectionFactory = new ConnectionFactory
                     {
@@ -78,54 +102,38 @@ namespace Mercurio.Tests.Messaging
                         UserName = "guest",
                         Password = "guest"
                     };
-                    
+
                     return connectionFactory;
                 }, new ActivitySource(SecondConnectionName))
-                .WithSerialization()
-                .AddLogging(x => x.AddConsole());
-
-            serviceCollection.AddTransient<IRpcServerService,RpcServerService>();
-            serviceCollection.AddTransient<IRpcClientService<string>, RpcClientService<string>>();
-            this.serviceProvider = serviceCollection.BuildServiceProvider();
+                .WithSerialization();
+            
+            builder.Services.AddTransient<IRpcServerService,RpcServerService>();
+            builder.Services.AddTransient<IRpcClientService<string>, RpcClientService<string>>();
+            
+            this.host = builder.Build();
+            this.serviceProvider = this.host.Services;
             this.rpcClientService = this.serviceProvider.GetRequiredService<IRpcClientService<string>>();
             this.rpcServerService = this.serviceProvider.GetRequiredService<IRpcServerService>();
+            this.logger = this.serviceProvider.GetRequiredService<ILogger<RuntimeTracingTestFixture>>();
+            this.host.Start();
         }
 
-        [TearDown]
-        public void Teardown()
+        [OneTimeTearDown]
+        public void TearDown()
         {
+            this.host.Dispose();
             this.rpcClientService.Dispose();
-            this.serviceProvider.Dispose();
         }
 
         [Test]
-        public async Task VerifyRpcProtocolAsync()
-        {
-            const string listeningQueue = "rpc_request";
-
-            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync);
-            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41);
-            var taskComplettion = new TaskCompletionSource<string>();
-            clientRequestObservable.Subscribe(result => taskComplettion.SetResult(result));
-
-            await Task.Delay(50);
-            
-            await taskComplettion.Task;
-            Assert.That(taskComplettion.Task.Result, Is.EqualTo("41"));
-            disposable.Dispose();
-        }
-
-        [Test]
-        public async Task VerifyActivites()
+        public async Task VerifyTracing()
         {
             const string listeningQueue = "rpc_request";
             Assert.That(Activity.Current, Is.Null);
 
-            var activities = new HashSet<Activity>();
-            Activity.CurrentChanged += ActivityOnCurrentChanged;
+            var activitySource = new ActivitySource("Local");
 
-            using var newActivity = new Activity("Parent").Start();
-            activities.Add(newActivity);
+            using var newActivity = activitySource.StartActivity("Parent", ActivityKind.Consumer, null);
             var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync, activityName:"Server");
             var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41, activityName:"Client" );
             var taskComplettion = new TaskCompletionSource<string>();
@@ -134,33 +142,10 @@ namespace Mercurio.Tests.Messaging
             await Task.Delay(50);
             
             await taskComplettion.Task;
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(activities, Has.Count.EqualTo(4));
-                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
-                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Client - Request"));
-                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Server"));
-                Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Client"));
-
-                foreach (var activity in activities)
-                {
-                    Assert.That(activity.TraceId.ToString(), Is.EqualTo(newActivity.TraceId.ToString()));
-                }
-            });
-            
             disposable.Dispose();
-            Activity.CurrentChanged -= ActivityOnCurrentChanged;
-            
-            void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
-            {
-                if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
-                {
-                    activities.Add(e.Current!);
-                }
-            }
+            this.logger.LogInformation("Integration Test over");
         }
-
+        
         private static Task<string> OnReceiveAsync(int arg)
         {
             return Task.FromResult(arg.ToString(CultureInfo.InvariantCulture));

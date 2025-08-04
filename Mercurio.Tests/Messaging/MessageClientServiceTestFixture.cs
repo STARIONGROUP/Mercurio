@@ -30,6 +30,7 @@ namespace Mercurio.Tests.Messaging
     using RabbitMQ.Client;
 
     using System.Collections.Concurrent;
+    using System.Diagnostics;
 
     [TestFixture]
     [Category("Integration")]
@@ -47,6 +48,14 @@ namespace Mercurio.Tests.Messaging
         [SetUp]
         public void Setup()
         {
+            var activityListener = new ActivityListener
+            {
+                ShouldListenTo = _ => true,
+                SampleUsingParentId = (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData,
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData        
+            };
+            
+            ActivitySource.AddActivityListener(activityListener);
             var serviceCollection = new ServiceCollection();
             
             serviceCollection.AddRabbitMqConnectionProvider()
@@ -61,7 +70,7 @@ namespace Mercurio.Tests.Messaging
                     };
                     
                     return connectionFactory;
-                })
+                }, new ActivitySource(FirstConnectionName))
                 .WithRabbitMqConnectionFactory(SecondConnectionName,_ =>
                 {
                     var connectionFactory = new ConnectionFactory
@@ -73,7 +82,7 @@ namespace Mercurio.Tests.Messaging
                     };
 
                     return connectionFactory;
-                })
+                },  new ActivitySource(SecondConnectionName))
                 .WithSerialization()
                 .AddLogging(x => x.AddConsole());
 
@@ -88,6 +97,8 @@ namespace Mercurio.Tests.Messaging
         {
             this.firstService.Dispose();
             this.secondService.Dispose();
+            Activity.Current?.Dispose();
+            Activity.Current = null;
             await Task.Delay(TimeOut);
         }
 
@@ -99,8 +110,8 @@ namespace Mercurio.Tests.Messaging
             var secondObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, exchangeConfiguration);
             var firstTaskCompletion = new TaskCompletionSource<string>();
             var secondTaskCompletion = new TaskCompletionSource<string>();
-            listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
-            secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
+            using var _ = listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
+            using var __ = secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
             var tasks = new List<Task> { firstTaskCompletion.Task, secondTaskCompletion.Task };
             var expectedMessage = new Queue<string>();
             expectedMessage.Enqueue(FirstSentMessage);
@@ -108,6 +119,8 @@ namespace Mercurio.Tests.Messaging
             await Task.Delay(TimeOut);
             
             await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+            await Task.Delay(TimeOut);
+            
             await this.firstService.PushAsync(FirstConnectionName, SecondSentMessage, exchangeConfiguration);
             
             while (tasks.Count > 0)
@@ -186,8 +199,8 @@ namespace Mercurio.Tests.Messaging
             var secondObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, exchangeConfiguration);
             var firstTaskCompletion = new TaskCompletionSource<string>();
             var secondTaskCompletion = new TaskCompletionSource<string>();
-            listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
-            secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
+            using var _ = listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
+            using var __ = secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
             await Task.Delay(TimeOut);
             
             await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
@@ -220,8 +233,8 @@ namespace Mercurio.Tests.Messaging
            var secondObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, secondExchangeConfiguration);
            var firstTaskCompletion = new TaskCompletionSource<string>();
            var secondTaskCompletion = new TaskCompletionSource<string>();
-           listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
-           secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
+           using var _ = listenObservable.Subscribe(message => firstTaskCompletion.TrySetResult(message));
+           using var __ = secondObservable.Subscribe(message => secondTaskCompletion.TrySetResult(message));
 
            await Task.Delay(TimeOut);
 
@@ -280,11 +293,11 @@ namespace Mercurio.Tests.Messaging
            var equalRoutingTask = new TaskCompletionSource<string>();
            var invalidListenTask = new TaskCompletionSource<string>();
 
-           fanoutObservable.Subscribe(message => fanoutTask.TrySetResult(message));
-           listenWithWildCardObservable.Subscribe(message => listenWithWildCardTask.TrySetResult(message));
-           listenWithHashObservable.Subscribe(message => listenWithHashTask.TrySetResult(message));
-           equalRoutingObservable.Subscribe(message => equalRoutingTask.TrySetResult(message));
-           invalidListenObservable.Subscribe(message => invalidListenTask.TrySetResult(message));
+           using var _ = fanoutObservable.Subscribe(message => fanoutTask.TrySetResult(message));
+           using var __ = listenWithWildCardObservable.Subscribe(message => listenWithWildCardTask.TrySetResult(message));
+           using var ___ = listenWithHashObservable.Subscribe(message => listenWithHashTask.TrySetResult(message));
+           using var ____ = equalRoutingObservable.Subscribe(message => equalRoutingTask.TrySetResult(message));
+           using var _____ = invalidListenObservable.Subscribe(message => invalidListenTask.TrySetResult(message));
            
            await Task.Delay(TimeOut);
            await this.firstService.PushAsync(FirstConnectionName, FirstSentMessage, pushExchangeConfiguration);
@@ -309,6 +322,95 @@ namespace Mercurio.Tests.Messaging
                Assert.That(taskWithTimeout, Is.Not.EqualTo(invalidListenTask.Task));
                Assert.That(invalidListenTask.Task.Status, Is.EqualTo(TaskStatus.WaitingForActivation));
            });
+       }
+
+       [Test]
+       public async Task VerifyActivities()
+       {
+           Assert.That(Activity.Current, Is.Null);
+           var activities = new HashSet<Activity>();
+           Activity.CurrentChanged += ActivityOnCurrentChanged;
+           
+           var activitySource = new ActivitySource("Local");
+           using var newActivity = activitySource.StartActivity("Parent", ActivityKind.Consumer, null);
+           activities.Add(newActivity);
+           
+           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForActivity");
+           var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration, "FirstActivity");
+           var firstTaskCompletion = new TaskCompletionSource<string>();
+           
+           using var _ = listenObservable.Subscribe(message =>
+           {
+               firstTaskCompletion.TrySetResult(message);
+           });
+           
+           await Task.Delay(TimeOut);
+            
+           await this.secondService.PushAsync(SecondConnectionName, FirstSentMessage, exchangeConfiguration, activityName: "Push request");
+           await firstTaskCompletion.Task;
+
+           Assert.Multiple(() =>
+           {
+               Assert.That(activities, Has.Count.EqualTo(3));
+               Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
+               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
+               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("FirstActivity"));
+           });
+           
+           Activity.CurrentChanged -= ActivityOnCurrentChanged;
+            
+           void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
+           {
+               if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+               {
+                   activities.Add(e.Current!);
+               }
+           }
+       }
+       
+       [Test]
+       public async Task VerifyActivitiesMultipleMessages()
+       {
+           Assert.That(Activity.Current, Is.Null);
+           var activities = new HashSet<Activity>();
+           Activity.CurrentChanged += ActivityOnCurrentChanged;
+           
+           var activitySource = new ActivitySource("Local");
+           using var newActivity = activitySource.StartActivity("Parent", ActivityKind.Consumer, null);
+           activities.Add(newActivity);
+           
+           var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForActivity");
+           var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
+           var firstTaskCompletion = new TaskCompletionSource<string>();
+           
+           using var _ = listenObservable.Subscribe(message =>
+           {
+               firstTaskCompletion.TrySetResult(message);
+           });
+           
+           await Task.Delay(TimeOut);
+            
+           await this.secondService.PushAsync(SecondConnectionName, [FirstSentMessage,SecondSentMessage], exchangeConfiguration, activityName: "Push request");
+           await firstTaskCompletion.Task;
+
+           Assert.Multiple(() =>
+           { 
+               Assert.That(activities, Has.Count.EqualTo(4));
+               Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
+               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
+               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Push request [1/2]"));
+               Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Push request [2/2]"));
+           });
+           
+           Activity.CurrentChanged -= ActivityOnCurrentChanged;
+            
+           void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
+           {
+               if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+               {
+                   activities.Add(e.Current!);
+               }
+           }
        }
     }
 }

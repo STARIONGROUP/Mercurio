@@ -20,6 +20,7 @@
 
 namespace Mercurio.Messaging
 {
+    using System.Diagnostics;
     using System.Reactive.Disposables;
     using System.Reactive.Linq;
     using System.Text;
@@ -71,16 +72,20 @@ namespace Mercurio.Messaging
         /// <typeparam name="TMessage">The type of messages to listen for.</typeparam>
         /// <param name="connectionName">The name of the registered connection to use.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
         /// <returns>An observable sequence of messages.</returns>
-        public override Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default)
+        public override Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (exchangeConfiguration == null)
             {
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
 
-            return this.ListenInternalAsync<TMessage>(connectionName, exchangeConfiguration, cancellationToken);
+            return this.ListenInternalAsync<TMessage>(connectionName, exchangeConfiguration, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -89,16 +94,20 @@ namespace Mercurio.Messaging
         /// <param name="connectionName">The name of the registered connection to use.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="onReceiveAsync">The <see cref="AsyncEventHandler{TEvent}" /></param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <return>A <see cref="Task" /> of <see cref="IDisposable" /></return>
-        public override Task<IDisposable> AddListenerAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken = default)
+        public override Task<IDisposable> AddListenerAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (exchangeConfiguration == null)
             {
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
 
-            return this.AddListenerInternalAsync(connectionName, exchangeConfiguration, onReceiveAsync, cancellationToken);
+            return this.AddListenerInternalAsync(connectionName, exchangeConfiguration, onReceiveAsync, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -110,20 +119,25 @@ namespace Mercurio.Messaging
         /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (messages == null)
             {
                 throw new ArgumentException("The messages collection cannot be null", nameof(messages));
             }
 
-            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, cancellationToken);
+            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -135,6 +149,11 @@ namespace Mercurio.Messaging
         /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -142,7 +161,7 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             if (Equals(message, default(TMessage)))
             {
@@ -154,30 +173,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
 
-            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
-        }
-
-        /// <summary>
-        /// Declares specific action that could be performed while a message has been received (e.g. to record new circuit Activity, for traceability).
-        /// </summary>
-        /// <param name="message">The <typeparamref name="TMessage" /></param>
-        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
-        /// <typeparam name="TMessage">Any object</typeparam>
-        protected virtual void OnMessageReceive<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration)
-        {
-        }
-
-        /// <summary>
-        /// Declares specific action that could be performed before pushing a new message (e.g. to record new circuit Activity, for traceability).
-        /// </summary>
-        /// <param name="message">The <typeparamref name="TMessage" /></param>
-        /// <param name="properties">
-        /// The <see cref="BasicProperties" /> that will be used to sent the <paramref name="message" />
-        /// </param>
-        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
-        /// <typeparam name="TMessage">Any object</typeparam>
-        protected virtual void OnPrePush<TMessage>(TMessage message, BasicProperties properties, IExchangeConfiguration exchangeConfiguration)
-        {
+            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, cancellationToken);
         }
 
         /// <summary>
@@ -186,16 +182,21 @@ namespace Mercurio.Messaging
         /// <typeparam name="TMessage">The type of messages to listen for.</typeparam>
         /// <param name="connectionName">The name of the registered connection to use.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
         /// <returns>An observable sequence of messages.</returns>
-        private async Task<IObservable<TMessage>> ListenInternalAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken)
+        private async Task<IObservable<TMessage>> ListenInternalAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, string activityName, CancellationToken cancellationToken)
             where TMessage : class
         {
             var channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
+            var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
 
             return Observable.Create<TMessage>(async observer =>
             {
-                var disposables = await this.InitializeListenerAsync(observer, channelLease.Channel, exchangeConfiguration, cancellationToken);
+                var disposables = await this.InitializeListenerAsync(observer, channelLease.Channel, exchangeConfiguration, activitySource, activityName, cancellationToken);
 
                 return Disposable.Create(() =>
                 {
@@ -211,21 +212,26 @@ namespace Mercurio.Messaging
         /// <param name="connectionName">The name of the registered connection to use.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="onReceiveAsync">The <see cref="AsyncEventHandler{TEvent}" /></param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <return>A <see cref="Task" /> of <see cref="IDisposable" /></return>
-        private async Task<IDisposable> AddListenerInternalAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken)
+        private async Task<IDisposable> AddListenerInternalAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, string activityName, CancellationToken cancellationToken)
         {
             AsyncEventingBasicConsumer consumer = null;
             ChannelLease channelLease = default;
+            ActivitySource activitySource = null;
 
             try
             {
                 channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
+                activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
 
                 await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channelLease.Channel, false);
 
                 consumer = new AsyncEventingBasicConsumer(channelLease.Channel);
-                consumer.ReceivedAsync += onReceiveAsync;
                 consumer.ReceivedAsync += OnMessageReceiveAsync;
 
                 await channelLease.Channel.BasicConsumeAsync(exchangeConfiguration.QueueName, true, consumer, cancellationToken);
@@ -243,16 +249,16 @@ namespace Mercurio.Messaging
             {
                 if (consumer != null)
                 {
-                    consumer.ReceivedAsync -= onReceiveAsync;
                     consumer.ReceivedAsync -= OnMessageReceiveAsync;
                 }
 
                 channelLease.Dispose();
             });
 
-            Task OnMessageReceiveAsync(object _, BasicDeliverEventArgs m)
+            Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs m)
             {
-                return Task.Run(() => this.OnMessageReceive(m, exchangeConfiguration), cancellationToken);
+                using var _ = this.StartActivity(m, activitySource, activityName);
+                return onReceiveAsync(sender, m);
             }
         }
 
@@ -265,17 +271,30 @@ namespace Mercurio.Messaging
         /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
-            foreach (var message in messages)
+            var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
+            var context = Activity.Current == null ? default : Activity.Current.Context;
+            using var activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
+
+            var messagesList = messages.ToList();
+            var messageIndex = 1;
+
+            foreach (var message in messagesList)
             {
-                await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
+                var subActivityName = activity == null ? null : $"{activityName} [{messageIndex++}/{messagesList.Count}]";
+                await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, subActivityName, cancellationToken);
             }
         }
 
@@ -288,6 +307,11 @@ namespace Mercurio.Messaging
         /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -295,7 +319,7 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
             try
             {
@@ -311,7 +335,10 @@ namespace Mercurio.Messaging
 
                 configureProperties?.Invoke(properties);
 
-                this.OnPrePush(message, properties, exchangeConfiguration);
+                var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
+                var context = Activity.Current == null ? default : Activity.Current.Context;
+                using var activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
+                IntegrateActivityInformation(properties, activity);
 
                 var stream = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(message, cancellationToken);
 
@@ -341,9 +368,14 @@ namespace Mercurio.Messaging
         /// <param name="observer">The observer to push messages to.</param>
         /// <param name="channel">The RabbitMQ channel.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="activitySource">The <see cref="ActivitySource" /> that will be use to start an <see cref="Activity" />, if applicable</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
+        /// <see cref="Activity" /> is started
+        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>A disposable to clean up resources.</returns>
-        private async Task<IDisposable> InitializeListenerAsync<TMessage>(IObserver<TMessage> observer, IChannel channel, IExchangeConfiguration exchangeConfiguration,
+        private async Task<IDisposable> InitializeListenerAsync<TMessage>(IObserver<TMessage> observer, IChannel channel, IExchangeConfiguration exchangeConfiguration, ActivitySource activitySource, string activityName,
             CancellationToken cancellationToken = default) where TMessage : class
         {
             AsyncEventingBasicConsumer consumer = null;
@@ -380,7 +412,7 @@ namespace Mercurio.Messaging
 
             async Task ConsumerOnReceivedAsync(object o, BasicDeliverEventArgs message)
             {
-                this.OnMessageReceive(message, exchangeConfiguration);
+                using var _ = this.StartActivity(message, activitySource, activityName);
                 using var stream = message.Body.AsStream();
                 var content = await this.SerializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType).DeserializeAsync<TMessage>(stream, cancellationToken);
                 observer.OnNext(content);
