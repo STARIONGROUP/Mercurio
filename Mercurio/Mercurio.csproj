@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>netstandard2.0;net9.0</TargetFrameworks>
-        <Version>1.3.0</Version>
+        <Version>1.4.0</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
@@ -24,10 +24,9 @@
         <Authors>Sam Gerené; Nathanael Smiechowski; Alexander Van Delft; Antoine Théate</Authors>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>RabbitMQ</PackageTags>
-        <PackageIcon>mercurio-logo-ngget.png</PackageIcon>
+        <PackageIcon>mercurio-logo-nugget.png</PackageIcon>
         <PackageReleaseNotes>
-            [FIX] Multiple Connection
-            [IMP] Channel Reuse using Channel Leasing and Channel Pooling
+            [ADD] Provide possiblity to start Activities for traceability
         </PackageReleaseNotes>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
