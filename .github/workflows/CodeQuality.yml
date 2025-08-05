@@ -49,6 +49,9 @@ jobs:
       - name: Run Tests and Compute Coverage for NUnit
         run: dotnet test Mercurio.Tests/Mercurio.Tests.csproj --no-restore --no-build --verbosity normal /p:CollectCoverage=true /p:CoverletOutput="../CoverageResults/" /p:MergeWith="../CoverageResults/coverage.json" /p:CoverletOutputFormat=\"opencover,json\"
 
+      - name: Run Tests and Compute Coverage for NUnit - Hosting
+        run: dotnet test Mercurio.Hosting.Tests/Mercurio.Hosting.Tests.csproj --no-restore --no-build --verbosity normal /p:CollectCoverage=true /p:CoverletOutput="../CoverageResults/" /p:MergeWith="../CoverageResults/coverage.json" /p:CoverletOutputFormat=\"opencover,json\"
+
       - name: Run Tests and Compute Coverage for TUnit
         run: dotnet test Mercurio.Tests.TUnit/Mercurio.Tests.TUnit.csproj --no-restore --no-build --verbosity normal /p:CollectCoverage=true /p:CoverletOutput="../CoverageResults/" /p:MergeWith="../CoverageResults/coverage.json" /p:CoverletOutputFormat=\"opencover,json\"
 
