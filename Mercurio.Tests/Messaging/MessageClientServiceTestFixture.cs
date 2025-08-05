@@ -243,14 +243,14 @@ namespace Mercurio.Tests.Messaging
            var tasks = new List<Task<string>> { firstTaskCompletion.Task, secondTaskCompletion.Task };
 
            await Task.WhenAll(tasks);
-
-           Assert.Multiple(() =>
+            
+           using (Assert.EnterMultipleScope())
            {
                foreach (var completedTask in tasks)
                {
                    Assert.That(completedTask.Result, Is.EqualTo(FirstSentMessage));
                }
-           });
+           }
        }
 
        [Test]
@@ -316,12 +316,12 @@ namespace Mercurio.Tests.Messaging
            await this.firstService.PushAsync(FirstConnectionName, SecondSentMessage, pushExchangeConfiguration);
 
            var taskWithTimeout = await Task.WhenAny(invalidListenTask.Task, Task.Delay(TimeOut));
-
-           Assert.Multiple(() =>
+            
+           using (Assert.EnterMultipleScope())
            {
                Assert.That(taskWithTimeout, Is.Not.EqualTo(invalidListenTask.Task));
                Assert.That(invalidListenTask.Task.Status, Is.EqualTo(TaskStatus.WaitingForActivation));
-           });
+           }
        }
 
        [Test]
@@ -349,13 +349,13 @@ namespace Mercurio.Tests.Messaging
            await this.secondService.PushAsync(SecondConnectionName, FirstSentMessage, exchangeConfiguration, activityName: "Push request");
            await firstTaskCompletion.Task;
 
-           Assert.Multiple(() =>
+           using (Assert.EnterMultipleScope())
            {
                Assert.That(activities, Has.Count.EqualTo(3));
                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("FirstActivity"));
-           });
+           }
            
            Activity.CurrentChanged -= ActivityOnCurrentChanged;
             
@@ -393,14 +393,14 @@ namespace Mercurio.Tests.Messaging
            await this.secondService.PushAsync(SecondConnectionName, [FirstSentMessage,SecondSentMessage], exchangeConfiguration, activityName: "Push request");
            await firstTaskCompletion.Task;
 
-           Assert.Multiple(() =>
+           using (Assert.EnterMultipleScope())
            { 
                Assert.That(activities, Has.Count.EqualTo(4));
                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Push request [1/2]"));
                Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Push request [2/2]"));
-           });
+           }
            
            Activity.CurrentChanged -= ActivityOnCurrentChanged;
             

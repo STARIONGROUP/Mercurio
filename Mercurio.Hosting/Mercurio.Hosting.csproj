@@ -4,14 +4,14 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>netstandard2.0;net9.0</TargetFrameworks>
-        <Version>1.4.0</Version>
+        <Version>1.0.0</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
-        <PackageId>Mercurio</PackageId>
-        <AssemblyTitle>Mercurio</AssemblyTitle>
-        <Title>Mercurio</Title>
-        <Description>A library to make RabbitMQ integration in .NET microservices seamless</Description>
+        <PackageId>Mercurio.Hosting</PackageId>
+        <AssemblyTitle>Mercurio.Hosting</AssemblyTitle>
+        <Title>Mercurio.Hosting</Title>
+        <Description>A Mercurio extension for microservice's hosting</Description>
         <RequireLicenseAcceptance>true</RequireLicenseAcceptance>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <IncludeSource>true</IncludeSource>
@@ -26,29 +26,19 @@
         <PackageTags>RabbitMQ</PackageTags>
         <PackageIcon>mercurio-logo-nugget.png</PackageIcon>
         <PackageReleaseNotes>
-            [ADD] Provide possiblity to start Activities for traceability
         </PackageReleaseNotes>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
-
-    <ItemGroup>
-        <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.0"/>
-        <PackageReference Include="Microsoft.AspNetCore.Hosting.Abstractions" Version="2.3.0"/>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8"/>
-        <PackageReference Include="Polly" Version="8.6.2"/>
-        <PackageReference Include="RabbitMQ.Client" Version="7.1.2"/>
-        <PackageReference Include="System.Reactive" Version="6.0.1"/>
-        <PackageReference Include="System.Text.Json" Version="9.0.8"/>
-    </ItemGroup>
-
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\"/>
         <None Include="..\mercurio-logo-strapline.png" Pack="true" PackagePath=""/>
         <None Include="..\mercurio-logo-nugget.png" Pack="true" PackagePath=""/>
     </ItemGroup>
-
     <ItemGroup>
-        <InternalsVisibleTo Include="$(MSBuildProjectName).Tests"/>
-        <InternalsVisibleTo Include="$(MSBuildProjectName).Tests.TUnit"/>
+      <ProjectReference Include="..\Mercurio\Mercurio.csproj" />
     </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
+    </ItemGroup>
+
 </Project>

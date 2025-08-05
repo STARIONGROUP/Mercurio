@@ -135,7 +135,7 @@ namespace Mercurio.Tests.Messaging
             
             await taskComplettion.Task;
 
-            Assert.Multiple(() =>
+            using (Assert.EnterMultipleScope())
             {
                 Assert.That(activities, Has.Count.EqualTo(4));
                 Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
@@ -147,7 +147,7 @@ namespace Mercurio.Tests.Messaging
                 {
                     Assert.That(activity.TraceId.ToString(), Is.EqualTo(newActivity.TraceId.ToString()));
                 }
-            });
+            }
             
             disposable.Dispose();
             Activity.CurrentChanged -= ActivityOnCurrentChanged;

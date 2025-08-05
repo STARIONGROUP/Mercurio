@@ -1,0 +1,207 @@
+﻿// -------------------------------------------------------------------------------------------------
+//  <copyright file="MessagingBackgroundService.cs" company="Starion Group S.A.">
+// 
+//    Copyright 2025 Starion Group S.A.
+// 
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+// 
+//        http://www.apache.org/licenses/LICENSE-2.0
+// 
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+// 
+//  </copyright>
+//  ------------------------------------------------------------------------------------------------
+
+namespace Mercurio.Hosting
+{
+    using System.Collections.Concurrent;
+    using System.Diagnostics;
+
+    using Mercurio.Messaging;
+    using Mercurio.Model;
+
+    using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
+    using Microsoft.Extensions.Logging;
+
+    using RabbitMQ.Client;
+
+    /// <summary>
+    /// The <see cref="MessagingBackgroundService" /> provides <see cref="IMessageClientService" /> interaction through a
+    /// <see cref="BackgroundService" />
+    /// </summary>
+    public abstract class MessagingBackgroundService : BackgroundService, IMessagingBackgroundService
+    {
+        /// <summary>
+        /// Gets the injected <see cref="IConfiguration" /> to provides configuration information for service initialization
+        /// </summary>
+        protected readonly IConfiguration Configuration;
+
+        /// <summary>
+        /// Gets the injected <see cref="ILogger{TCategory}" /> to allow logging
+        /// </summary>
+        protected readonly ILogger<MessagingBackgroundService> Logger;
+
+        /// <summary>
+        /// Gets the resolved <see cref="IMessageClientService" /> that allow RabbitMQ communisation
+        /// </summary>
+        protected readonly IMessageClientService MessageClientService;
+
+        /// <summary>
+        /// A <see cref="ConcurrentQueue{T}" /> of <see cref="Func{TResult}" /> that records all messages that have to be sent
+        /// </summary>
+        private readonly ConcurrentQueue<Func<Task>> messagesToPush = [];
+
+        /// <summary>
+        /// Gets the injected <see cref="IServiceProvider" /> to allow registered type resolving on inherited classes
+        /// </summary>
+        protected readonly IServiceProvider ServiceProvider;
+
+        /// <summary>
+        /// Gets the <see cref="List{T}" /> of <see cref="IDisposable" /> that represents <see cref="IMessageClientService" />
+        /// listen subscriptions
+        /// </summary>
+        protected readonly List<IDisposable> Subscriptions = [];
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MessagingBackgroundService" />
+        /// </summary>
+        /// <param name="serviceProvider">
+        /// The injected <see cref="IServiceProvider" /> that allow to resolve
+        /// <see cref="IMessageClientService" /> instance, even if not registered as scope
+        /// </param>
+        /// <param name="logger">The injected <see cref="ILogger{TCategory}" /> to allow logging</param>
+        /// <param name="configuration">The injected <see cref="IConfiguration" /> to provides configuration information for service initialization</param>
+        protected MessagingBackgroundService(IServiceProvider serviceProvider, ILogger<MessagingBackgroundService> logger, IConfiguration configuration)
+        {
+            this.ServiceProvider = serviceProvider;
+            using var scope = this.ServiceProvider.CreateScope();
+            this.MessageClientService = scope.ServiceProvider.GetService<IMessageClientService>();
+            this.Logger = logger;
+            this.Configuration = configuration;
+        }
+
+        /// <summary>
+        /// Gets or sets the name of the registered connection that has to be used to communicate with RabbitMQ
+        /// </summary>
+        public string ConnectionName { get; protected set; }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public void PushMessage<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        {
+            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, message, exchangeConfiguration, configureProperties, activityName, cancellationToken));
+        }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="messages" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public void PushMessages<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        {
+            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, messages, exchangeConfiguration, configureProperties, activityName, cancellationToken));
+        }
+
+        /// <summary>
+        /// Triggered when the application host is ready to start the service.
+        /// </summary>
+        /// <param name="cancellationToken">Indicates that the start process has been aborted.</param>
+        /// <returns>A <see cref="T:System.Threading.Tasks.Task" /> that represents the asynchronous Start operation.</returns>
+        public override async Task StartAsync(CancellationToken cancellationToken)
+        {
+            await this.InitializeAsync();
+
+            if (string.IsNullOrEmpty(this.ConnectionName))
+            {
+                this.Logger.LogError("No configuration process to set the ConnectionName, can not go further");
+                throw new InvalidOperationException("The ConnectionName property must be set during the initialization.");
+            }
+
+            await base.StartAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// This method is called when the <see cref="T:Microsoft.Extensions.Hosting.IHostedService" /> starts. The implementation should return a task that represents
+        /// the lifetime of the long running operation(s) being performed.
+        /// </summary>
+        /// <param name="stoppingToken">
+        /// Triggered when
+        /// <see cref="M:Microsoft.Extensions.Hosting.IHostedService.StopAsync(System.Threading.CancellationToken)" /> is called.
+        /// </param>
+        /// <returns>A <see cref="T:System.Threading.Tasks.Task" /> that represents the long running operations.</returns>
+        /// <remarks>See <see href="https://learn.microsoft.com/dotnet/core/extensions/workers">Worker Services in .NET</see> for implementation guidelines.</remarks>
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            this.Logger.LogInformation("Background Service ready to start");
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    if (this.messagesToPush.TryDequeue(out var messageToPush))
+                    {
+                        await messageToPush();
+                    }
+                }
+                catch (OperationCanceledException exception)
+                {
+                    this.Logger.LogError(exception, "Processing message got canceled.");
+                }
+                catch (Exception exception)
+                {
+                    this.Logger.LogError(exception, "Error occured while processing a message");
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(10), stoppingToken);
+            }
+
+            this.Logger.LogInformation("Background Service stopped");
+        }
+
+        /// <summary>
+        /// Initializes this service (e.g. to set the <see cref="ConnectionName" /> and fill <see cref="Subscriptions" />
+        /// collection
+        /// </summary>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        protected abstract Task InitializeAsync();
+    }
+}

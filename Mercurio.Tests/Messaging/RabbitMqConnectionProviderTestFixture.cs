@@ -83,12 +83,12 @@ namespace Mercurio.Tests.Messaging
             {
                 oldLeaseChannel = lease.Channel;
 
-                Assert.Multiple(() =>
+                using (Assert.EnterMultipleScope())
                 {
                     Assert.That(lease, Is.Not.Default);
                     Assert.That(lease.Channel, Is.Not.Null);
                     Assert.That(lease.Channel.IsOpen, Is.True);
-                });
+                }
             }
 
             await using var newLease = await this.service.LeaseChannelAsync(ConnectionName);
