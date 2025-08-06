@@ -80,7 +80,8 @@ namespace Mercurio.Hosting.Tests
         {
             using var cancellationTokenSource = new CancellationTokenSource();
             _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
-            
+            await Task.Delay(TimeSpan.FromMilliseconds(10), CancellationToken.None);
+
             string[] messages = ["ABC", "DEF", "GHI"];
 
             foreach (var message in messages)
