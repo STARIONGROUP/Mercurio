@@ -17,6 +17,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Tests", "Mercurio.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Tests.TUnit", "Mercurio.Tests.TUnit\Mercurio.Tests.TUnit.csproj", "{A2D193D1-101C-4A44-93F6-FE07450B2921}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Hosting", "Mercurio.Hosting\Mercurio.Hosting.csproj", "{CA423FE4-647B-4B7B-9DB2-BADAA512979A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mercurio.Hosting.Tests", "Mercurio.Hosting.Tests\Mercurio.Hosting.Tests.csproj", "{7EF01657-ADD4-42C4-8DDA-6991FF5CB5FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -35,6 +39,14 @@ Global
 		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A2D193D1-101C-4A44-93F6-FE07450B2921}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CA423FE4-647B-4B7B-9DB2-BADAA512979A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CA423FE4-647B-4B7B-9DB2-BADAA512979A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CA423FE4-647B-4B7B-9DB2-BADAA512979A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CA423FE4-647B-4B7B-9DB2-BADAA512979A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7EF01657-ADD4-42C4-8DDA-6991FF5CB5FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7EF01657-ADD4-42C4-8DDA-6991FF5CB5FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7EF01657-ADD4-42C4-8DDA-6991FF5CB5FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7EF01657-ADD4-42C4-8DDA-6991FF5CB5FC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

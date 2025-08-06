@@ -45,7 +45,7 @@ namespace Mercurio.Tests.Messaging
         {
             this.connectionProvider = new Mock<IRabbitMqConnectionProvider>();
             var logger = new Mock<ILogger<TestMessageClientBaseService>>();
-            
+
             this.service = new TestMessageClientBaseService(this.connectionProvider.Object, logger.Object);
         }
 
@@ -68,28 +68,17 @@ namespace Mercurio.Tests.Messaging
             var lease = new ChannelLease(connectionName, channel.Object, this.connectionProvider.Object);
             this.connectionProvider.Setup(x => x.LeaseChannelAsync(connectionName, It.IsAny<CancellationToken>())).ReturnsAsync(lease);
 
-            await Assert.MultipleAsync(async () =>
+            using (Assert.EnterMultipleScope())
             {
                 await Assert.ThatAsync(async () => await this.service.TestGetChannelAsync(connectionName, CancellationToken.None), Is.SameAs(channel.Object));
                 this.connectionProvider.Verify(x => x.LeaseChannelAsync(connectionName, It.IsAny<CancellationToken>()), Times.Exactly(2));
-            });
+            }
         }
     }
-    
+
     [ExcludeFromCodeCoverage]
-    public class TestMessageClientBaseService: MessageClientBaseService
+    public class TestMessageClientBaseService : MessageClientBaseService
     {
-        /// <summary>
-        /// Establishes a connection to the RabbitMQ server and returns an asynchronous <see cref="IChannel" /> Channel.
-        /// </summary>
-        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
-        /// <param name="cancellationToken">A <see cref="CancellationToken" /> for task cancellation.</param>
-        /// <returns>An asynchronous task returning a <see cref="IChannel" /> Channel.</returns>
-        public async Task<IChannel> TestGetChannelAsync(string connectionName, CancellationToken cancellationToken = default)
-        {
-            return (await this.LeaseChannelAsync(connectionName, cancellationToken)).Channel;
-        }
-        
         /// <summary>
         /// Initializes a new instance of <see cref="MessageClientBaseService" />
         /// </summary>
@@ -100,6 +89,17 @@ namespace Mercurio.Tests.Messaging
         /// <param name="logger">The injected <see cref="Microsoft.Extensions.Logging.ILogger{TCategoryName}" /></param>
         public TestMessageClientBaseService(IRabbitMqConnectionProvider connectionProvider, ILogger<MessageClientBaseService> logger) : base(connectionProvider, logger)
         {
+        }
+
+        /// <summary>
+        /// Establishes a connection to the RabbitMQ server and returns an asynchronous <see cref="IChannel" /> Channel.
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken" /> for task cancellation.</param>
+        /// <returns>An asynchronous task returning a <see cref="IChannel" /> Channel.</returns>
+        public async Task<IChannel> TestGetChannelAsync(string connectionName, CancellationToken cancellationToken = default)
+        {
+            return (await this.LeaseChannelAsync(connectionName, cancellationToken)).Channel;
         }
 
         /// <summary>
@@ -153,10 +153,11 @@ namespace Mercurio.Tests.Messaging
         /// <param name="cancellationToken">An optional <see cref="System.Threading.CancellationToken" /></param>
         /// <returns>An awaitable <see cref="System.Threading.Tasks.Task" /></returns>
         /// <remarks>
-        /// By default, the <see cref="RabbitMQ.Client.BasicProperties" /> is configured to use the <see cref="RabbitMQ.Client.DeliveryModes.Persistent" /> mode and sets the
+        /// By default, the <see cref="RabbitMQ.Client.BasicProperties" /> is configured to use the
+        /// <see cref="RabbitMQ.Client.DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="RabbitMQ.Client.BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "",CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -179,10 +180,11 @@ namespace Mercurio.Tests.Messaging
         /// <returns>An awaitable <see cref="System.Threading.Tasks.Task" /></returns>
         /// <exception cref="System.ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
         /// <remarks>
-        /// By default, the <see cref="RabbitMQ.Client.BasicProperties" /> is configured to use the <see cref="RabbitMQ.Client.DeliveryModes.Persistent" /> mode and sets the
+        /// By default, the <see cref="RabbitMQ.Client.BasicProperties" /> is configured to use the
+        /// <see cref="RabbitMQ.Client.DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="RabbitMQ.Client.BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "",CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
