@@ -105,11 +105,12 @@ namespace Mercurio.Hosting.Tests
         {
             using var cancellationTokenSource = new CancellationTokenSource();
             _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
-            
+            await Task.Delay(TimeSpan.FromMilliseconds(10), CancellationToken.None);
+
             string[] messages = ["ABC", "DEF", "GHI"];
 
             this.backgroundService.PushMessages(messages,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
-            await Task.Delay(TimeSpan.FromMilliseconds(1000), CancellationToken.None);
+            await Task.Delay(TimeSpan.FromMilliseconds(1200), CancellationToken.None);
 
             await cancellationTokenSource.CancelAsync();
             
