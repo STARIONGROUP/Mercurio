@@ -119,6 +119,22 @@ namespace Mercurio.Hosting.Tests
                 Assert.That(this.backgroundService.ReceivedMessages, Is.EquivalentTo(messages));
             }
         }
+        
+        [Test]
+        public async Task VerifyBackgroundServiceBehaviourTaskCanceled()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
+            
+            string[] messages = ["ABC", "DEF", "GHI"];
+
+            this.backgroundService.PushMessages(messages,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
+            await cancellationTokenSource.CancelAsync();
+            
+            await Task.Delay(TimeSpan.FromMilliseconds(1000), CancellationToken.None);
+
+            Assert.That(this.backgroundService.ReceivedMessages, Is.Empty);
+        }
 
         [Test]
         public async Task VerifyInvalidInitialization()
