@@ -173,11 +173,11 @@ namespace Mercurio.Tests.Messaging
             {
                 var result = await Task.WhenAny(taskCompletionSource.Task, Task.Delay(2000));
                 
-                Assert.Multiple(() =>
+                using (Assert.EnterMultipleScope())
                 {
                     Assert.That(result, Is.EqualTo(taskCompletionSource.Task), "Expected listener did not receive message in time.");
                     Assert.That(taskCompletionSource.Task.Result, Is.EqualTo(message));
-                });
+                }
             }
 
             Assert.That(receivedMessages, Has.Count.GreaterThanOrEqualTo(listenerCount), "Not all listeners received at least one message.");
@@ -304,14 +304,14 @@ namespace Mercurio.Tests.Messaging
 
            var validTasks = new List<Task<string>> { fanoutTask.Task, listenWithWildCardTask.Task , listenWithHashTask.Task, equalRoutingTask.Task};
            await Task.WhenAll(validTasks);
-
-           Assert.Multiple(() =>
+           
+           using (Assert.EnterMultipleScope())
            {
-               foreach (var validTask in validTasks)
-               {
-                   Assert.That(validTask.Result, Is.EqualTo(FirstSentMessage));
-               }
-           });
+              foreach (var validTask in validTasks)
+              {
+                  Assert.That(validTask.Result, Is.EqualTo(FirstSentMessage));
+              }
+           }
            
            await this.firstService.PushAsync(FirstConnectionName, SecondSentMessage, pushExchangeConfiguration);
 
