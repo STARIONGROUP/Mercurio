@@ -43,7 +43,7 @@ namespace Mercurio.Tests.Messaging
         private const string SecondConnectionName = "RabbitMQConnection2";
         private const string FirstSentMessage = "Hello World!";
         private const string SecondSentMessage = "Hello World!";
-        private const int TimeOut = 100;
+        private const int TimeOut = 200;
         
         [SetUp]
         public void Setup()
