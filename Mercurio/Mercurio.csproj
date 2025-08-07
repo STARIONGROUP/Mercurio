@@ -25,10 +25,11 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>RabbitMQ</PackageTags>
         <PackageIcon>mercurio-logo-nugget.png</PackageIcon>
+        <GenerateSBOM>true</GenerateSBOM>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
             [FIX] Not able to resolve Serialization in case of null ContentType
         </PackageReleaseNotes>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -39,6 +40,7 @@
         <PackageReference Include="RabbitMQ.Client" Version="7.1.2"/>
         <PackageReference Include="System.Reactive" Version="6.0.1"/>
         <PackageReference Include="System.Text.Json" Version="9.0.8"/>
+        <PackageReference Include="Microsoft.Sbom.Targets" Version="4.1.0" PrivateAssets="all" />
     </ItemGroup>
 
     <ItemGroup>
