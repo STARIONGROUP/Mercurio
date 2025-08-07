@@ -39,6 +39,7 @@ namespace Mercurio.Tests.Messaging
     {
         private IMessageClientService firstService;
         private IMessageClientService secondService;
+        private ServiceProvider serviceProvider;
         private const string FirstConnectionName = "RabbitMQConnection1";
         private const string SecondConnectionName = "RabbitMQConnection2";
         private const string FirstSentMessage = "Hello World!";
@@ -87,9 +88,9 @@ namespace Mercurio.Tests.Messaging
                 .AddLogging(x => x.AddConsole());
 
             serviceCollection.AddTransient<IMessageClientService, MessageClientService>();
-            var serviceProvider = serviceCollection.BuildServiceProvider();
-            this.firstService = serviceProvider.GetRequiredService<IMessageClientService>();
-            this.secondService = serviceProvider.GetRequiredService<IMessageClientService>();
+            this.serviceProvider = serviceCollection.BuildServiceProvider();
+            this.firstService = this.serviceProvider.GetRequiredService<IMessageClientService>();
+            this.secondService = this.serviceProvider.GetRequiredService<IMessageClientService>();
         }
 
         [TearDown]
@@ -97,6 +98,7 @@ namespace Mercurio.Tests.Messaging
         {
             this.firstService.Dispose();
             this.secondService.Dispose();
+            await this.serviceProvider.DisposeAsync();
             Activity.Current?.Dispose();
             Activity.Current = null;
             await Task.Delay(TimeOut);
