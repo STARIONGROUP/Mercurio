@@ -65,6 +65,8 @@ namespace Mercurio.Serializer
         /// <exception cref="InvalidOperationException">Thrown when no serializer is registered for the specified format.</exception>
         public IMessageSerializerService ResolveSerializer(string format = SupportedSerializationFormat.Unspecified)
         {
+            format ??= SupportedSerializationFormat.Unspecified;
+            
             if (this.serializers.TryGetValue(format, out var serializer))
             {
                 return serializer;
@@ -81,6 +83,8 @@ namespace Mercurio.Serializer
         /// <exception cref="InvalidOperationException">Thrown when no deserializer is registered for the specified format.</exception>
         public IMessageDeserializerService ResolveDeserializer(string format = SupportedSerializationFormat.Unspecified)
         {
+            format ??= SupportedSerializationFormat.Unspecified;
+            
             if (this.deserializers.TryGetValue(format, out var deserializer))
             {
                 return deserializer;
