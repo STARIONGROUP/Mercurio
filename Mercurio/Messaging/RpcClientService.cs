@@ -173,13 +173,25 @@ namespace Mercurio.Messaging
                 var correlationId = args.BasicProperties.CorrelationId;
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
-                {
-                    using var _ = this.StartActivity(args, activitySource, activityName, ActivityKind.Client);
+                { 
+                    var activity = this.StartActivity(args, activitySource, activityName, ActivityKind.Client);
 
-                    var response = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
-                        .DeserializeAsync<TResponse>(args.Body.AsStream());
+                    try
+                    {
+                        var response = await this.SerializationProviderService.ResolveDeserializer(args.BasicProperties.ContentType)
+                            .DeserializeAsync<TResponse>(args.Body.AsStream());
 
-                    taskCompletionSource.TrySetResult(response);
+                        taskCompletionSource.TrySetResult(response);
+                        activity?.SetStatus(ActivityStatusCode.Ok);
+                    }
+                    catch (Exception ex)
+                    {
+                        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    }
+                    finally
+                    {
+                        activity?.Dispose();
+                    }
                 }
             }
         }
@@ -218,6 +230,8 @@ namespace Mercurio.Messaging
 
             return Observable.Create<TResponse>(async observer =>
             {
+                Activity activity = null;
+
                 try
                 {
                     var taskCompletionSource = new TaskCompletionSource<TResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -225,7 +239,7 @@ namespace Mercurio.Messaging
                     rpcQueueDeclared.ChannelLease.Channel.CallbackExceptionAsync += ChannelOnCallbackException;
                     var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
                     var context = Activity.Current == null ? default : Activity.Current.Context;
-                    using var activity = this.StartActivity(activitySource, context, $"{activityName} - Request", ActivityKind.Client);
+                    activity = this.StartActivity(activitySource, context, $"{activityName} - Request", ActivityKind.Client);
                     IntegrateActivityInformation(properties, activity);
 
                     var serializedBody = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(request, cancellationToken);
@@ -246,20 +260,28 @@ namespace Mercurio.Messaging
                         if (taskCompletionSource.Task.Exception != null)
                         {
                             observer.OnError(taskCompletionSource.Task.Exception);
+                            activity?.SetStatus(ActivityStatusCode.Error, taskCompletionSource.Task.Exception.Message);
                         }
                         else
                         {
                             observer.OnError(new InvalidOperationException("Error occured during the process"));
+                            activity?.SetStatus(ActivityStatusCode.Error, "Error occured during the process");
                         }
                     }
                     else
                     {
                         observer.OnNext(response);
+                        activity?.SetStatus(ActivityStatusCode.Ok);
                     }
                 }
                 catch (Exception exception)
                 {
                     observer.OnError(exception);
+                    activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                }
+                finally
+                {
+                    activity?.Dispose();
                 }
 
                 var disposable = Disposable.Create(() =>

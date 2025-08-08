@@ -147,8 +147,21 @@ namespace Mercurio.Messaging
 
             async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs args)
             {
-                using var activity = this.StartActivity(args, activitySource, activityName, ActivityKind.Server);
-                await this.OnRequestReceivedAsync(sender, args, onReceiveAsync, configureProperties, activity, cancellationToken);
+                var activity = this.StartActivity(args, activitySource, activityName, ActivityKind.Server);
+
+                try
+                {
+                    await this.OnRequestReceivedAsync(sender, args, onReceiveAsync, configureProperties, activity, cancellationToken);
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                }
+                catch (Exception ex)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                }
+                finally
+                {
+                    activity?.Dispose();
+                }
             }
         }
 

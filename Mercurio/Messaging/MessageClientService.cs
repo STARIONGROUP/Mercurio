@@ -255,10 +255,23 @@ namespace Mercurio.Messaging
                 channelLease.Dispose();
             });
 
-            Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs m)
+            async Task OnMessageReceiveAsync(object sender, BasicDeliverEventArgs m)
             {
-                using var _ = this.StartActivity(m, activitySource, activityName);
-                return onReceiveAsync(sender, m);
+                var activity = this.StartActivity(m, activitySource, activityName);
+
+                try
+                {
+                    await onReceiveAsync(sender, m);
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                }
+                catch (Exception e)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, e.Message);
+                }
+                finally
+                {
+                    activity?.Dispose();
+                }
             }
         }
 
@@ -321,6 +334,8 @@ namespace Mercurio.Messaging
         /// </remarks>
         private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
         {
+            Activity activity = null;
+
             try
             {
                 await using var channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
@@ -337,7 +352,7 @@ namespace Mercurio.Messaging
 
                 var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
                 var context = Activity.Current == null ? default : Activity.Current.Context;
-                using var activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
+                activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
                 IntegrateActivityInformation(properties, activity);
 
                 var stream = await this.SerializationProviderService.ResolveSerializer(properties.ContentType).SerializeAsync(message, cancellationToken);
@@ -354,10 +369,16 @@ namespace Mercurio.Messaging
 
                 this.Logger.LogDebug("Message Body {Body}", Encoding.UTF8.GetString(body.ToArray()));
                 this.Logger.LogInformation("Message {MessageName} sent to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception exception)
             {
                 this.Logger.LogError(exception, "The message {MessageName} could not be queued to {MessageQueue} reason : {Exception}", typeof(TMessage).Name, exchangeConfiguration.QueueName, exception.Message);
+                activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+            }
+            finally
+            {
+                activity?.Dispose();
             }
         }
 
@@ -412,11 +433,26 @@ namespace Mercurio.Messaging
 
             async Task ConsumerOnReceivedAsync(object o, BasicDeliverEventArgs message)
             {
-                using var _ = this.StartActivity(message, activitySource, activityName);
-                using var stream = message.Body.AsStream();
-                var content = await this.SerializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType).DeserializeAsync<TMessage>(stream, cancellationToken);
-                observer.OnNext(content);
-                await Task.CompletedTask;
+                var activity = this.StartActivity(message, activitySource, activityName);
+
+                try
+                {
+                    using var stream = message.Body.AsStream();
+                    var content = await this.SerializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType).DeserializeAsync<TMessage>(stream, cancellationToken);
+                    observer.OnNext(content);
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                    
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    throw;
+                }
+                finally
+                {
+                    activity?.Dispose();
+                }
             }
 
             Task ConsumerOnShutdownAsync(object _, ShutdownEventArgs arguments)
