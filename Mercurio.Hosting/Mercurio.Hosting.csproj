@@ -25,21 +25,26 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>RabbitMQ</PackageTags>
         <PackageIcon>mercurio-logo-nugget.png</PackageIcon>
+        <GenerateSBOM>true</GenerateSBOM>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
             [BUMP] To Mercurio 1.4.1
         </PackageReleaseNotes>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
+
     <ItemGroup>
         <None Include="..\README.md" Pack="true" PackagePath="\"/>
         <None Include="..\mercurio-logo-strapline.png" Pack="true" PackagePath=""/>
         <None Include="..\mercurio-logo-nugget.png" Pack="true" PackagePath=""/>
     </ItemGroup>
+
     <ItemGroup>
       <ProjectReference Include="..\Mercurio\Mercurio.csproj" />
     </ItemGroup>
+
     <ItemGroup>
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
+      <PackageReference Include="Microsoft.Sbom.Targets" Version="4.1.0" PrivateAssets="all" />
     </ItemGroup>
 
 </Project>
