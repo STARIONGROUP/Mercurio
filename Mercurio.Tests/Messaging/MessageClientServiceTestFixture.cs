@@ -350,13 +350,17 @@ namespace Mercurio.Tests.Messaging
             
            await this.secondService.PushAsync(SecondConnectionName, FirstSentMessage, exchangeConfiguration, activityName: "Push request");
            await firstTaskCompletion.Task;
-
+           await Task.Delay(100);
+           
            using (Assert.EnterMultipleScope())
            {
                Assert.That(activities, Has.Count.EqualTo(3));
                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
+               Assert.That(activities.ElementAt(0).Status, Is.EqualTo(ActivityStatusCode.Unset));
                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
+               Assert.That(activities.ElementAt(1).Status, Is.EqualTo(ActivityStatusCode.Ok));
                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("FirstActivity"));
+               Assert.That(activities.ElementAt(2).Status, Is.EqualTo(ActivityStatusCode.Ok));
            }
            
            Activity.CurrentChanged -= ActivityOnCurrentChanged;

@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>netstandard2.0;net9.0</TargetFrameworks>
-        <Version>1.4.1</Version>
+        <Version>1.5.0</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
@@ -28,7 +28,8 @@
         <GenerateSBOM>true</GenerateSBOM>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
-            [FIX] Not able to resolve Serialization in case of null ContentType
+            [ADD] SBOM 
+            [ADD] Handle Activity.StatusCode
         </PackageReleaseNotes>
     </PropertyGroup>
 
