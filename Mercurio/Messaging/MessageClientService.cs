@@ -457,7 +457,15 @@ namespace Mercurio.Messaging
 
             Task ConsumerOnShutdownAsync(object _, ShutdownEventArgs arguments)
             {
-                observer.OnError(new OperationCanceledException($"The channel has shutdown [Reply: {arguments.ReplyText}, AMQPcode: {arguments.ReplyCode}]"));
+                if (arguments.ReplyCode == 200)
+                {
+                    observer.OnCompleted();
+                }
+                else
+                {
+                    observer.OnError(new OperationCanceledException($"The channel has shutdown [Reply: {arguments.ReplyText}, AMQPcode: {arguments.ReplyCode}]"));
+                }
+
                 return Task.CompletedTask;
             }
 
