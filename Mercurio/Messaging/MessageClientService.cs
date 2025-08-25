@@ -124,20 +124,21 @@ namespace Mercurio.Messaging
         /// <see cref="Activity" /> information will be sent in the message header.
         /// In case of null or empty, no <see cref="Activity" /> is started
         /// </param>
+        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", ActivityContext activityContext = default, CancellationToken cancellationToken = default)
         {
             if (messages == null)
             {
                 throw new ArgumentException("The messages collection cannot be null", nameof(messages));
             }
 
-            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, activityName, cancellationToken);
+            return this.PushInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, activityName, activityContext, cancellationToken);
         }
 
         /// <summary>
@@ -154,6 +155,7 @@ namespace Mercurio.Messaging
         /// <see cref="Activity" /> information will be sent in the message header.
         /// In case of null or empty, no <see cref="Activity" /> is started
         /// </param>
+        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -161,7 +163,7 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", ActivityContext activityContext = default, CancellationToken cancellationToken = default)
         {
             if (Equals(message, default(TMessage)))
             {
@@ -173,7 +175,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
             }
 
-            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, cancellationToken);
+            return this.PushInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, activityContext, cancellationToken);
         }
 
         /// <summary>
@@ -289,13 +291,14 @@ namespace Mercurio.Messaging
         /// <see cref="Activity" /> information will be sent in the message header.
         /// In case of null or empty, no <see cref="Activity" /> is started
         /// </param>
+        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
+        private async Task PushInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, CancellationToken cancellationToken)
         {
             var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
             var context = Activity.Current == null ? default : Activity.Current.Context;
@@ -307,7 +310,7 @@ namespace Mercurio.Messaging
             foreach (var message in messagesList)
             {
                 var subActivityName = activity == null ? null : $"{activityName} [{messageIndex++}/{messagesList.Count}]";
-                await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, subActivityName, cancellationToken);
+                await this.PushAsync(connectionName, message, exchangeConfiguration, configureProperties, subActivityName, activityContext, cancellationToken: cancellationToken);
             }
         }
 
@@ -325,6 +328,7 @@ namespace Mercurio.Messaging
         /// <see cref="Activity" /> information will be sent in the message header.
         /// In case of null or empty, no <see cref="Activity" /> is started
         /// </param>
+        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -332,7 +336,7 @@ namespace Mercurio.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
+        private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, CancellationToken cancellationToken)
         {
             Activity activity = null;
 
@@ -351,7 +355,14 @@ namespace Mercurio.Messaging
                 configureProperties?.Invoke(properties);
 
                 var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
-                var context = Activity.Current == null ? default : Activity.Current.Context;
+
+                var context = activityContext;
+
+                if (activityContext == default && Activity.Current != null)
+                {
+                    context = Activity.Current.Context;
+                }
+
                 activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
                 IntegrateActivityInformation(properties, activity);
 

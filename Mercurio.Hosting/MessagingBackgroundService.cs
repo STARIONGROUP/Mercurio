@@ -114,7 +114,8 @@ namespace Mercurio.Hosting
         /// </remarks>
         public void PushMessage<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
-            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, message, exchangeConfiguration, configureProperties, activityName, cancellationToken));
+            var activityContext = Activity.Current?.Context ?? default;
+            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, message, exchangeConfiguration, configureProperties, activityName, activityContext, cancellationToken: cancellationToken));
         }
 
         /// <summary>
@@ -138,7 +139,8 @@ namespace Mercurio.Hosting
         /// </remarks>
         public void PushMessages<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
         {
-            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, messages, exchangeConfiguration, configureProperties, activityName, cancellationToken));
+            var activityContext = Activity.Current?.Context ?? default;
+            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, messages, exchangeConfiguration, configureProperties, activityName, activityContext, cancellationToken: cancellationToken));
         }
 
         /// <summary>

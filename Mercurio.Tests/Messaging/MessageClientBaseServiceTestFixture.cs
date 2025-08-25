@@ -150,14 +150,14 @@ namespace Mercurio.Tests.Messaging
         /// <see cref="Activity" /> information will be sent in the message header.
         /// In case of null or empty, no <see cref="Activity" /> is started
         /// </param>
-        /// <param name="cancellationToken">An optional <see cref="System.Threading.CancellationToken" /></param>
-        /// <returns>An awaitable <see cref="System.Threading.Tasks.Task" /></returns>
+        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
-        /// By default, the <see cref="RabbitMQ.Client.BasicProperties" /> is configured to use the
-        /// <see cref="RabbitMQ.Client.DeliveryModes.Persistent" /> mode and sets the
-        /// <see cref="RabbitMQ.Client.BasicProperties.ContentType" /> as 'application/json"
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", ActivityContext activityContext = default, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -176,15 +176,15 @@ namespace Mercurio.Tests.Messaging
         /// <see cref="Activity" /> information will be sent in the message header.
         /// In case of null or empty, no <see cref="Activity" /> is started
         /// </param>
-        /// <param name="cancellationToken">A possible <see cref="System.Threading.CancellationToken" /></param>
-        /// <returns>An awaitable <see cref="System.Threading.Tasks.Task" /></returns>
-        /// <exception cref="System.ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
+        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
         /// <remarks>
-        /// By default, the <see cref="RabbitMQ.Client.BasicProperties" /> is configured to use the
-        /// <see cref="RabbitMQ.Client.DeliveryModes.Persistent" /> mode and sets the
-        /// <see cref="RabbitMQ.Client.BasicProperties.ContentType" /> as 'application/json"
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", ActivityContext activityContext = default, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
