@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>netstandard2.0;net9.0</TargetFrameworks>
-        <Version>1.1.1</Version>
+        <Version>1.2.0</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
@@ -28,7 +28,7 @@
         <GenerateSBOM>true</GenerateSBOM>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
-            [BUMP] To Mercurio 1.5.1
+            [IMP] Improve Activity tracing by providing ActivityContext (Fix missing Parent/Chill relationship in Activities)
         </PackageReleaseNotes>
     </PropertyGroup>
 
