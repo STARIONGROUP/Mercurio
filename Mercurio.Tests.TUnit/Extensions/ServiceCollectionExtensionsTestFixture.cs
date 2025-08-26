@@ -18,8 +18,6 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-using ThrowsExtensions = TUnit.Assertions.AssertConditions.Throws.ThrowsExtensions;
-
 namespace Mercurio.Tests.TUnit.Extensions
 {
     using Mercurio.Configuration.IConfiguration;
