@@ -75,10 +75,6 @@ namespace Mercurio.Messaging
         /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
         /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when the server response has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
@@ -89,7 +85,7 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(connectionName))
             {
@@ -106,7 +102,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(request), "The request message must not be null");
             }
 
-            return this.SendRequestInternalAsync(connectionName, rpcServerQueueName, request, configureProperties, activityName, cancellationToken);
+            return this.SendRequestInternalAsync(connectionName, rpcServerQueueName, request, configureProperties, cancellationToken);
         }
 
         /// <summary>
@@ -174,7 +170,7 @@ namespace Mercurio.Messaging
 
                 if (!string.IsNullOrEmpty(correlationId) && this.callbacks.TryRemove(correlationId, out var taskCompletionSource))
                 { 
-                    var activity = this.StartActivity(args, activitySource, activityName, ActivityKind.Client);
+                    var activity = this.StartActivity(args, activitySource, $"{activityName} - Callback", ActivityKind.Client);
 
                     try
                     {
@@ -203,18 +199,15 @@ namespace Mercurio.Messaging
         /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
         /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when the server response has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
         /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json
         /// </remarks>
-        private async Task<IObservable<TResponse>> SendRequestInternalAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
+        private async Task<IObservable<TResponse>> SendRequestInternalAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
+            var activityName = $"RPC {typeof(TRequest).Name} To {rpcServerQueueName}";
             var rpcQueueDeclared = await this.EnsureRpcClientIsInitializedAsync(connectionName, activityName);
             var correlationId = Guid.NewGuid().ToString();
 

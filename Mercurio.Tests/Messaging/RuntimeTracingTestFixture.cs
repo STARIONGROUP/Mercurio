@@ -134,8 +134,8 @@ namespace Mercurio.Tests.Messaging
             var activitySource = new ActivitySource("Local");
 
             using var newActivity = activitySource.StartActivity("Parent", ActivityKind.Consumer, null);
-            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync, activityName:"Server");
-            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41, activityName:"Client" );
+            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync);
+            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41);
             var taskComplettion = new TaskCompletionSource<string>();
             clientRequestObservable.Subscribe(result => taskComplettion.SetResult(result));
 

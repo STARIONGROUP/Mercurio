@@ -76,5 +76,28 @@ namespace Mercurio.Model
         /// <param name="isDeclareForPush">Asserts that the declaration is used for a push action</param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         public abstract Task EnsureQueueAndExchangeAreDeclaredAsync(IChannel channel, bool isDeclareForPush);
+
+        /// <summary>Returns a string that represents the current object.</summary>
+        /// <returns>A string that represents the current object.</returns>
+        public override string ToString()
+        {
+            var content = new List<string>();
+
+            if (!string.IsNullOrEmpty(this.ExchangeName))
+            {
+                content.Add($"Exchange: {this.ExchangeName}");
+            }
+            else if(!string.IsNullOrEmpty(this.QueueName))
+            {
+                content.Add($"Queue: {this.QueueName}");
+            }
+
+            if (!string.IsNullOrEmpty(this.RoutingKey))
+            {
+                content.Add($"RoutingKey: {this.RoutingKey}");
+            }
+            
+            return string.Join(" ", content);
+        }
     }
 }

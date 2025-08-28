@@ -126,8 +126,8 @@ namespace Mercurio.Tests.Messaging
 
             using var newActivity = new Activity("Parent").Start();
             activities.Add(newActivity);
-            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync, activityName:"Server");
-            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41, activityName:"Client" );
+            var disposable = await this.rpcServerService.ListenForRequestAsync<int, string>(FirstConnectionName, listeningQueue, OnReceiveAsync);
+            var clientRequestObservable = await this.rpcClientService.SendRequestAsync(SecondConnectionName, listeningQueue, 41);
             var taskComplettion = new TaskCompletionSource<string>();
             clientRequestObservable.Subscribe(result => taskComplettion.SetResult(result));
 
@@ -139,9 +139,9 @@ namespace Mercurio.Tests.Messaging
             {
                 Assert.That(activities, Has.Count.EqualTo(4));
                 Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
-                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Client - Request"));
-                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Server"));
-                Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Client"));
+                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("RPC Int32 To rpc_request - Request"));
+                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("RPC Request Handle Int32 On rpc_request"));
+                Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("RPC Int32 To rpc_request - Callback"));
 
                 foreach (var activity in activities)
                 {
@@ -154,7 +154,7 @@ namespace Mercurio.Tests.Messaging
             
             void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
             {
-                if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+                if (e.Current is { Source.Name: FirstConnectionName or SecondConnectionName })
                 {
                     activities.Add(e.Current!);
                 }

@@ -20,7 +20,6 @@
 
 namespace Mercurio.Tests.Messaging
 {
-    using System.Diagnostics;
     using System.Diagnostics.CodeAnalysis;
 
     using Mercurio.Messaging;
@@ -108,13 +107,9 @@ namespace Mercurio.Tests.Messaging
         /// <typeparam name="TMessage">The type of messages to listen for.</typeparam>
         /// <param name="connectionName">The name of the registered connection to use.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
         /// <returns>An observable sequence of messages.</returns>
-        public override Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, string activityName = "", CancellationToken cancellationToken = default)
+        public override Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -125,13 +120,9 @@ namespace Mercurio.Tests.Messaging
         /// <param name="connectionName">The name of the registered connection to use.</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="onReceiveAsync">The <see cref="AsyncEventHandler{TEvent}" /></param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <return>A <see cref="Task" /> of <see cref="IDisposable" /></return>
-        public override Task<IDisposable> AddListenerAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, string activityName = "", CancellationToken cancellationToken = default)
+        public override Task<IDisposable> AddListenerAsync(string connectionName, IExchangeConfiguration exchangeConfiguration, AsyncEventHandler<BasicDeliverEventArgs> onReceiveAsync, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -145,19 +136,13 @@ namespace Mercurio.Tests.Messaging
         /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
-        /// <see cref="Activity" /> information will be sent in the message header.
-        /// In case of null or empty, no <see cref="Activity" /> is started
-        /// </param>
-        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", ActivityContext activityContext = default, CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -171,12 +156,6 @@ namespace Mercurio.Tests.Messaging
         /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
-        /// <see cref="Activity" /> information will be sent in the message header.
-        /// In case of null or empty, no <see cref="Activity" /> is started
-        /// </param>
-        /// <param name="activityContext">An optional <see cref="ActivityContext"/>. If not set, current context will be based on <see cref="Activity.Current"/></param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> is null</exception>
@@ -184,7 +163,7 @@ namespace Mercurio.Tests.Messaging
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", ActivityContext activityContext = default, CancellationToken cancellationToken = default)
+        public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

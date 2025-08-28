@@ -25,6 +25,7 @@ namespace Mercurio.Hosting
 
     using Mercurio.Messaging;
     using Mercurio.Model;
+    using Mercurio.Provider;
 
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
@@ -57,7 +58,7 @@ namespace Mercurio.Hosting
         /// <summary>
         /// A <see cref="ConcurrentQueue{T}" /> of <see cref="Func{TResult}" /> that records all messages that have to be sent
         /// </summary>
-        private readonly ConcurrentQueue<Func<Task>> messagesToPush = [];
+        private readonly ConcurrentQueue<(Func<Task> MessageToPush, ActivityContext Context, string ActivityName)> messagesToPush = [];
 
         /// <summary>
         /// Gets the injected <see cref="IServiceProvider" /> to allow registered type resolving on inherited classes
@@ -84,9 +85,15 @@ namespace Mercurio.Hosting
             this.ServiceProvider = serviceProvider;
             using var scope = this.ServiceProvider.CreateScope();
             this.MessageClientService = scope.ServiceProvider.GetService<IMessageClientService>();
+            this.connectionProvider = scope.ServiceProvider.GetService<IRabbitMqConnectionProvider>();
             this.Logger = logger;
             this.Configuration = configuration;
         }
+
+        /// <summary>
+        /// Gets the resolved <see cref="IRabbitMqConnectionProvider"/> that provides registered <see cref="ActivitySource"/> access 
+        /// </summary>
+        private readonly IRabbitMqConnectionProvider connectionProvider;
 
         /// <summary>
         /// Gets or sets the name of the registered connection that has to be used to communicate with RabbitMQ
@@ -101,21 +108,17 @@ namespace Mercurio.Hosting
         /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
-        /// <see cref="Activity" /> information will be sent in the message header.
-        /// In case of null or empty, no <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public void PushMessage<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public void PushMessage<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             var activityContext = Activity.Current?.Context ?? default;
-            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, message, exchangeConfiguration, configureProperties, activityName, activityContext, cancellationToken: cancellationToken));
+            var activityName = $"Background Push {typeof(TMessage).Name} [{exchangeConfiguration}]";
+            this.messagesToPush.Enqueue((() => this.MessageClientService.PushAsync(this.ConnectionName, message, exchangeConfiguration, configureProperties, cancellationToken: cancellationToken), activityContext, activityName));
         }
 
         /// <summary>
@@ -126,21 +129,17 @@ namespace Mercurio.Hosting
         /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
-        /// <see cref="Activity" /> information will be sent in the message header.
-        /// In case of null or empty, no <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task" /></returns>
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public void PushMessages<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public void PushMessages<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null,  CancellationToken cancellationToken = default)
         {
             var activityContext = Activity.Current?.Context ?? default;
-            this.messagesToPush.Enqueue(() => this.MessageClientService.PushAsync(this.ConnectionName, messages, exchangeConfiguration, configureProperties, activityName, activityContext, cancellationToken: cancellationToken));
+            var activityName = $"Background Push Multiple {typeof(TMessage).Name} [{exchangeConfiguration}]";
+            this.messagesToPush.Enqueue((() => this.MessageClientService.PushAsync(this.ConnectionName, messages, exchangeConfiguration, configureProperties, cancellationToken: cancellationToken), activityContext, activityName));
         }
 
         /// <summary>
@@ -181,7 +180,13 @@ namespace Mercurio.Hosting
                 {
                     if (this.messagesToPush.TryDequeue(out var messageToPush))
                     {
-                        await messageToPush();
+                        var activitySource = this.connectionProvider.GetRegisteredActivitySource(this.ConnectionName);
+                        
+                        _ = Task.Run(async () =>
+                        {
+                            using var activity = activitySource?.StartActivity(messageToPush.ActivityName, ActivityKind.Producer, messageToPush.Context);
+                            await messageToPush.MessageToPush();
+                        }, stoppingToken);
                     }
                 }
                 catch (OperationCanceledException exception)
