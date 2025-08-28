@@ -20,8 +20,6 @@
 
 namespace Mercurio.Messaging
 {
-    using System.Diagnostics;
-
     using RabbitMQ.Client;
 
     /// <summary>
@@ -37,10 +35,6 @@ namespace Mercurio.Messaging
         /// <param name="rpcServerQueueName">The name of the queue that is used by the server to listen after request</param>
         /// <param name="request">The <typeparamref name="TRequest" /> that should be sent to the server</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when the server response has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>An awaitable <see cref="Task{T}" /> with the observable that will track the server response</returns>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be sent to the server</typeparam>
@@ -51,6 +45,6 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default);
+        Task<IObservable<TResponse>> SendRequestAsync<TRequest>(string connectionName, string rpcServerQueueName, TRequest request, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
     }
 }

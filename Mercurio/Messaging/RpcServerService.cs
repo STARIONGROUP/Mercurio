@@ -60,10 +60,6 @@ namespace Mercurio.Messaging
         /// <param name="queueName">The name of the listening queue</param>
         /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
@@ -75,7 +71,7 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        public Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, string activityName = "", CancellationToken cancellationToken = default)
+        public Task<IDisposable> ListenForRequestAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(queueName))
             {
@@ -87,7 +83,7 @@ namespace Mercurio.Messaging
                 throw new ArgumentNullException(nameof(onReceiveAsync), "The OnReceiveAsync cannot be null.");
             }
 
-            return this.ListenForRequestInternalAsync(connectionName, queueName, onReceiveAsync, configureProperties, activityName, cancellationToken);
+            return this.ListenForRequestInternalAsync(connectionName, queueName, onReceiveAsync, configureProperties, cancellationToken);
         }
 
         /// <summary>
@@ -97,10 +93,6 @@ namespace Mercurio.Messaging
         /// <param name="queueName">The name of the listening queue</param>
         /// <param name="onReceiveAsync">The action that should be executed when a request is received</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
-        /// <param name="activityName">
-        /// Defines the name of an <see cref="Activity" /> that should be initialized when a message has been received, for traceability. In case of null or empty, no
-        /// <see cref="Activity" /> is started
-        /// </param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <typeparam name="TRequest">Any type that correspond to the kind of request to be processed</typeparam>
         /// <typeparam name="TResponse">Any type that correspond to the kind of response that has to be send back</typeparam>
@@ -108,12 +100,13 @@ namespace Mercurio.Messaging
         /// <remarks>
         /// By default, the <see cref="BasicProperties" /> is configured to set the <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
-        private async Task<IDisposable> ListenForRequestInternalAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, string activityName, CancellationToken cancellationToken)
+        private async Task<IDisposable> ListenForRequestInternalAsync<TRequest, TResponse>(string connectionName, string queueName, Func<TRequest, Task<TResponse>> onReceiveAsync, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
             AsyncEventingBasicConsumer consumer = null;
             ChannelLease channelLease = default;
             ActivitySource activitySource = null;
-
+            var activityName = $"RPC Request Handle {typeof(TRequest).Name} On {queueName}";
+            
             try
             {
                 channelLease = await this.ConnectionProvider.LeaseChannelAsync(connectionName, cancellationToken);

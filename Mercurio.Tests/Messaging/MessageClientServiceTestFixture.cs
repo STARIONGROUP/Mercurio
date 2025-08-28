@@ -44,7 +44,7 @@ namespace Mercurio.Tests.Messaging
         private const string SecondConnectionName = "RabbitMQConnection2";
         private const string FirstSentMessage = "Hello World!";
         private const string SecondSentMessage = "Hello World!";
-        private const int TimeOut = 200;
+        private const int TimeOut = 300;
         
         [SetUp]
         public void Setup()
@@ -338,7 +338,7 @@ namespace Mercurio.Tests.Messaging
            activities.Add(newActivity);
            
            var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForActivity");
-           var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration, "FirstActivity");
+           var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
            var firstTaskCompletion = new TaskCompletionSource<string>();
            
            using var _ = listenObservable.Subscribe(message =>
@@ -348,7 +348,7 @@ namespace Mercurio.Tests.Messaging
            
            await Task.Delay(TimeOut);
             
-           await this.secondService.PushAsync(SecondConnectionName, FirstSentMessage, exchangeConfiguration, activityName: "Push request");
+           await this.secondService.PushAsync(SecondConnectionName, FirstSentMessage, exchangeConfiguration);
            await firstTaskCompletion.Task;
            await Task.Delay(100);
            
@@ -357,9 +357,9 @@ namespace Mercurio.Tests.Messaging
                Assert.That(activities, Has.Count.EqualTo(3));
                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
                Assert.That(activities.ElementAt(0).Status, Is.EqualTo(ActivityStatusCode.Unset));
-               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
+               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push String [Queue: DefaultChannelForActivity]"));
                Assert.That(activities.ElementAt(1).Status, Is.EqualTo(ActivityStatusCode.Ok));
-               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("FirstActivity"));
+               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("String Received [Queue: DefaultChannelForActivity]"));
                Assert.That(activities.ElementAt(2).Status, Is.EqualTo(ActivityStatusCode.Ok));
            }
            
@@ -367,7 +367,7 @@ namespace Mercurio.Tests.Messaging
             
            void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
            {
-               if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+               if (e.Current is { Source.Name: FirstConnectionName or SecondConnectionName })
                {
                    activities.Add(e.Current!);
                }
@@ -396,23 +396,24 @@ namespace Mercurio.Tests.Messaging
            
            await Task.Delay(TimeOut);
             
-           await this.secondService.PushAsync(SecondConnectionName, [FirstSentMessage,SecondSentMessage], exchangeConfiguration, activityName: "Push request");
+           await this.secondService.PushAsync(SecondConnectionName, [FirstSentMessage,SecondSentMessage], exchangeConfiguration);
            await firstTaskCompletion.Task;
 
            using (Assert.EnterMultipleScope())
            { 
-               Assert.That(activities, Has.Count.EqualTo(4));
+               Assert.That(activities, Has.Count.EqualTo(5));
                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
-               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push request"));
-               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Push request [1/2]"));
-               Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Push request [2/2]"));
+               Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push String collection [Queue: DefaultChannelForActivity]"));
+               Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Push String collection [Queue: DefaultChannelForActivity] [1/2]"));
+               Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Push String collection [Queue: DefaultChannelForActivity] [2/2]"));
+               Assert.That(activities.ElementAt(4).OperationName, Is.EqualTo("String Received [Queue: DefaultChannelForActivity]"));
            }
            
            Activity.CurrentChanged -= ActivityOnCurrentChanged;
             
            void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
            {
-               if (e.Current != null && e.Current.Source.Name is FirstConnectionName or SecondConnectionName)
+               if (e.Current is { Source.Name: FirstConnectionName or SecondConnectionName })
                {
                    activities.Add(e.Current!);
                }
