@@ -79,7 +79,7 @@ namespace Mercurio.Messaging
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
         /// <returns>An observable sequence of messages.</returns>
-        public abstract Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default) where TMessage : class;
+        public abstract Task<IObservable<TMessage>> ListenAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Adds a listener to the specified queue

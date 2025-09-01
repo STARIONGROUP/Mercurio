@@ -45,6 +45,8 @@ namespace Mercurio.Hosting.Tests
         private ServiceProvider serviceProvider;
         private Subject<string> messageSubject;
         private Subject<string> postErrorSubject; 
+        private Subject<int> messageSubjectAsync;
+        private Subject<int> postErrorSubjectAsync; 
         
         [SetUp]
         public void Setup()
@@ -74,10 +76,16 @@ namespace Mercurio.Hosting.Tests
             
             this.messageSubject = new Subject<string>();
             this.postErrorSubject = new Subject<string>();
+            this.messageSubjectAsync = new Subject<int>();
+            this.postErrorSubjectAsync = new Subject<int>();
 
-            this.messageClientService.SetupSequence(x => x.ListenAsync<string>(ConfiguredConnectionName, It.IsAny<IExchangeConfiguration>(), It.IsAny<CancellationToken>()))
+            this.messageClientService.SetupSequence(x => x.ListenAsync<string>(ConfiguredConnectionName, It.IsAny<FanoutExchangeConfiguration>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(this.messageSubject.AsObservable())
                 .ReturnsAsync(this.postErrorSubject.AsObservable());
+            
+            this.messageClientService.SetupSequence(x => x.ListenAsync<int>(ConfiguredConnectionName, It.IsAny<DirectExchangeConfiguration>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(this.messageSubjectAsync.AsObservable())
+                .ReturnsAsync(this.postErrorSubjectAsync.AsObservable());
             
             _ = this.backgroundService.StartAsync(CancellationToken.None);
         }
@@ -89,6 +97,8 @@ namespace Mercurio.Hosting.Tests
             this.serviceProvider.Dispose();
             this.messageSubject.Dispose();
             this.postErrorSubject.Dispose();
+            this.messageSubjectAsync.Dispose();
+            this.postErrorSubjectAsync.Dispose(); 
         }
 
         [Test]
@@ -104,6 +114,18 @@ namespace Mercurio.Hosting.Tests
             Assert.That(this.backgroundService.ReceivedMessages, Is.Empty);
             
             this.postErrorSubject.OnNext("\"Hello again\"");
+            Assert.That(this.backgroundService.ReceivedMessages, Has.Count.EqualTo(1));
+            
+            this.messageSubjectAsync.OnNext(1);
+            Assert.That(this.backgroundService.ReceivedMessages, Has.Count.EqualTo(2));
+
+            this.messageSubjectAsync.OnError(new Exception());
+            Assert.That(this.backgroundService.ReceivedMessages, Is.Empty);
+            
+            this.messageSubjectAsync.OnNext(1);
+            Assert.That(this.backgroundService.ReceivedMessages, Is.Empty);
+            
+            this.postErrorSubjectAsync.OnNext(2);
             Assert.That(this.backgroundService.ReceivedMessages, Has.Count.EqualTo(1));
         }
     }

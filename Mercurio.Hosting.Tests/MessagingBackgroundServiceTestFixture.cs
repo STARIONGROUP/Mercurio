@@ -200,6 +200,12 @@ namespace Mercurio.Hosting.Tests
             {
                 this.ConnectionName = ConfiguredConnectionName;
                 await this.RegisterListener(() => this.MessageClientService.ListenAsync<string>(this.ConnectionName, new FanoutExchangeConfiguration("BackgroundTest")), this.ReceivedMessages.Add, onError: _ => this.ReceivedMessages.Clear());
+                
+                await this.RegisterAsyncListener(() => this.MessageClientService.ListenAsync<int>(this.ConnectionName, new DirectExchangeConfiguration("BackgroundTestInt")), (x) => 
+                {
+                    this.ReceivedMessages.Add(x.ToString());
+                    return Task.CompletedTask; 
+                }, onError: _ => this.ReceivedMessages.Clear());
             }
         }
     }
