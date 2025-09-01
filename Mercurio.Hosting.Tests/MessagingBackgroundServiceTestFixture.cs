@@ -161,7 +161,7 @@ namespace Mercurio.Hosting.Tests
             }
 
             /// <summary>
-            /// Initializes this service (e.g. to set the <see cref="ConnectionName" /> and fill <see cref="Subscriptions" />
+            /// Initializes this service (e.g. to set the <see cref="MessagingBackgroundService.ConnectionName" /> and register subscriptions
             /// collection
             /// </summary>
             /// <returns>An awaitable <see cref="Task" /></returns>
@@ -171,7 +171,7 @@ namespace Mercurio.Hosting.Tests
             }
         }
 
-        private class TestMessagingBackgroundService: MessagingBackgroundService
+        public class TestMessagingBackgroundService: MessagingBackgroundService
         {
             /// <summary>
             /// Stores all received message
@@ -192,15 +192,14 @@ namespace Mercurio.Hosting.Tests
             }
 
             /// <summary>
-            /// Initializes this service (e.g. to set the <see cref="ConnectionName" /> and fill <see cref="Subscriptions" />
+            /// Initializes this service (e.g. to set the <see cref="MessagingBackgroundService.ConnectionName" /> and register subscriptions
             /// collection
             /// </summary>
             /// <returns>An awaitable <see cref="Task" /></returns>
             protected override async Task InitializeAsync()
             {
                 this.ConnectionName = ConfiguredConnectionName;
-                var listenerObservable = await this.MessageClientService.ListenAsync<string>(this.ConnectionName, new FanoutExchangeConfiguration("BackgroundTest"));
-                this.Subscriptions.Add(listenerObservable.Subscribe(x => this.ReceivedMessages.Add(x)));
+                await this.RegisterListener(() => this.MessageClientService.ListenAsync<string>(this.ConnectionName, new FanoutExchangeConfiguration("BackgroundTest")), this.ReceivedMessages.Add, onError: _ => this.ReceivedMessages.Clear());
             }
         }
     }
