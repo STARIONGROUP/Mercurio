@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>net9.0;net6.0;net7.0;net8.0;netstandard2.1</TargetFrameworks>
-        <Version>1.7.0</Version>
+        <Version>1.8.0</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
@@ -28,8 +28,7 @@
         <GenerateSBOM>true</GenerateSBOM>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
-            [REMOVE] ActivityName/ActivityContext parameters to ease usage
-            [ADD] Automatic activity name generation 
+            [UPDATE] TragetFrameworks
         </PackageReleaseNotes>
     </PropertyGroup>
 
