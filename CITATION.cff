@@ -1,15 +1,47 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-authors:
-- family-names: "Starion Group S.A."
-  given-names: "MBSE Competence Area Developers"
-- family-names: "Gerené"
-  given-names: "Sam"
-- family-names: "Smiechowski"
-  given-names: "Nathanaël"
-- family-names: "Théate"
-  given-names: "Antoine"
+
 title: "Mercurio"
-version: 1.0.0
-date-released: 2025/05/22
+abstract: "A library to make RabbitMQ integration in .NET microservices seamless"
+version: "1.8.0"
+date-released: "2025-09-01"
 url: "https://github.com/STARIONGROUP/Mercurio"
+
+authors:
+  - given-names: "Antoine"
+    family-names: "Théate"
+    affiliation: "Starion Group S.A."
+  - given-names: "Nathanael"
+    family-names: "Smiechowski"
+    affiliation: "Starion Group S.A."
+  - given-names: "Sam"
+    family-names: "Gerené"
+    affiliation: "Starion Group S.A."
+    orcid: "https://orcid.org/0009-0000-1848-550X"
+  - name: "Starion Group S.A."
+    affiliation: "Starion Group S.A."
+    given-names: "MBSE Competence Area Developers"
+
+repository-code: "https://github.com/STARIONGROUP/Mercurio"
+license: "Apache-2.0"
+
+preferred-citation:
+  type: software
+  title: "A library to make RabbitMQ integration in .NET microservices seamless"
+  authors:
+    - given-names: "Antoine"
+      family-names: "Théate"
+      affiliation: "Starion Group S.A."
+    - given-names: "Nathanael"
+      family-names: "Smiechowski"
+      affiliation: "Starion Group S.A."
+    - given-names: "Sam"
+      family-names: "Gerené"
+      affiliation: "Starion Group S.A."
+      orcid: "https://orcid.org/0009-0000-1848-550X"
+    - name: "Starion Group S.A."
+      affiliation: "Starion Group S.A."
+      given-names: "MBSE Competence Area Developers"
+  version: "1.8.0"
+  url: "https://github.com/STARIONGROUP/Mercurio"
+  date-released: "2025-09-01"
