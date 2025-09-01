@@ -191,6 +191,7 @@ namespace Mercurio.Hosting
             }
 
             this.subscriptions.Clear();
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>
