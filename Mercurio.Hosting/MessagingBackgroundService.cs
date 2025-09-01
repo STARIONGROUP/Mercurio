@@ -303,12 +303,7 @@ namespace Mercurio.Hosting
         /// <typeparam name="TMessage">Any type of message that can be listen</typeparam>
         private async Task HandleErrorAndRecover<TMessage>(Exception exception, Func<Task<IObservable<TMessage>>> observableFunction, Action<TMessage> onReceive, Action<Exception> onError, Action onCompleted, Guid key)
         {
-            if (this.subscriptions.TryGetValue(key, out var oldSubscription))
-            {
-                oldSubscription.Dispose();
-                this.subscriptions.Remove(key);
-            }
-
+            this.TryDisposeSubscription(key);
             onError?.Invoke(exception);
             await this.RegisterListener(observableFunction, onReceive, onError, onCompleted);
         }
@@ -328,12 +323,24 @@ namespace Mercurio.Hosting
         /// <typeparam name="TMessage">Any type of message that can be listen</typeparam>
         private async Task HandleErrorAndRecover<TMessage>(Exception exception, Func<Task<IObservable<TMessage>>> observableFunction, Func<TMessage, Task> onReceive, Action<Exception> onError, Action onCompleted, Guid key)
         {
-            var oldSubscription = this.subscriptions[key];
-            oldSubscription.Dispose();
-            this.subscriptions.Remove(key);
-
+            this.TryDisposeSubscription(key);
             onError?.Invoke(exception);
             await this.RegisterAsyncListener(observableFunction, onReceive, onError, onCompleted);
+        }
+
+        /// <summary>
+        /// Tries to dispose a listening subsctiption, store into the <see cref="subscriptions" /> dictionary
+        /// </summary>
+        /// <param name="key">The <see cref="IDisposable" /> identifier</param>
+        private void TryDisposeSubscription(Guid key)
+        {
+            if (!this.subscriptions.TryGetValue(key, out var oldSubscription))
+            {
+                return;
+            }
+
+            oldSubscription.Dispose();
+            this.subscriptions.Remove(key);
         }
     }
 }
