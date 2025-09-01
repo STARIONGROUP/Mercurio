@@ -170,7 +170,6 @@ namespace Mercurio.Messaging
         /// <param name="cancellationToken">Cancellation token for the asynchronous operation.</param>
         /// <returns>An observable sequence of messages.</returns>
         private async Task<IObservable<TMessage>> ListenInternalAsync<TMessage>(string connectionName, IExchangeConfiguration exchangeConfiguration, CancellationToken cancellationToken)
-            where TMessage : class
         {
             var channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
             var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
@@ -377,7 +376,7 @@ namespace Mercurio.Messaging
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>A disposable to clean up resources.</returns>
         private async Task<IDisposable> InitializeListenerAsync<TMessage>(IObserver<TMessage> observer, IChannel channel, IExchangeConfiguration exchangeConfiguration, ActivitySource activitySource,
-            CancellationToken cancellationToken = default) where TMessage : class
+            CancellationToken cancellationToken = default)
         {
             AsyncEventingBasicConsumer consumer = null;
 
