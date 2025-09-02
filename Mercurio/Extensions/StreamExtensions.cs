@@ -49,8 +49,7 @@ namespace Mercurio.Extensions
 
             using var temporaryStream = new MemoryStream();
             stream.CopyTo(temporaryStream);
-            temporaryStream.Position = 0;
-            return temporaryStream.ToReadOnlyMemory();
+            return new ReadOnlyMemory<byte>(temporaryStream.ToArray());
         }
     }
 }

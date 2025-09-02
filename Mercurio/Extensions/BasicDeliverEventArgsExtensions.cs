@@ -47,6 +47,16 @@ namespace Mercurio.Extensions
         /// </returns>
         public static bool TryReadHeader<T>(this IReadOnlyBasicProperties properties, string header, out T result) where T : class
         {
+            if (properties == null)
+            {
+                throw new ArgumentNullException(nameof(properties));
+            }
+
+            if (header == null)
+            {
+                throw new ArgumentNullException(nameof(header));
+            }
+
             result = null;
 
             if (properties.Headers?.TryGetValue(header, out var value) is true)

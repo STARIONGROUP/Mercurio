@@ -39,7 +39,18 @@ namespace Mercurio.Extensions
         public static IDisposable SubscribeAsync<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Action<Exception> onError = null,
             Action onCompleted = null)
         {
-            return source.Select(x => Observable.FromAsync(() => onNextAsync(x))).Concat().Subscribe(_ => { }, onError ?? (_ => { }), onCompleted ?? (() => { }));
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            if (onNextAsync == null)
+            {
+                throw new ArgumentNullException(nameof(onNextAsync));
+            }
+
+            return source.Select(x => Observable.FromAsync(() => onNextAsync(x))).Concat()
+                .Subscribe(_ => { }, onError ?? (_ => { }), onCompleted ?? (() => { }));
         }
     }
 }
