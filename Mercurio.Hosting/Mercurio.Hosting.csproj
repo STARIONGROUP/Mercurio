@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>net9.0;net8.0;netstandard2.1</TargetFrameworks>
-        <Version>1.4.0</Version>
+        <Version>1.4.1</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
@@ -28,9 +28,7 @@
         <GenerateSBOM>true</GenerateSBOM>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
-            [UPDATE] TargetFrameworks
-            [ADD] IHealthCheck interface inheritance
-            [ADD] AutoRecovery on error for listen observable
+            [UPDATE] to Mercurio 1.8.1
         </PackageReleaseNotes>
     </PropertyGroup>
 
