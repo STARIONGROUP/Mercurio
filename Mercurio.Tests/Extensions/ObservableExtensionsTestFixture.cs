@@ -20,12 +20,12 @@
 
 namespace Mercurio.Tests.Extensions
 {
-    using Mercurio.Extensions;
-
     using System;
     using System.Collections.Generic;
     using System.Reactive.Subjects;
     using System.Threading.Tasks;
+
+    using Mercurio.Extensions;
 
     [TestFixture]
     public class ObservableExtensionsTestFixture
@@ -33,11 +33,14 @@ namespace Mercurio.Tests.Extensions
         [Test]
         public void VerifyNullArgumentsThrow()
         {
-            IObservable<int> source = null;
-            Assert.That(() => source.SubscribeAsync(_ => Task.CompletedTask), Throws.ArgumentNullException);
+            using (Assert.EnterMultipleScope())
+            {
+                IObservable<int> source = null;
+                Assert.That(() => source.SubscribeAsync(_ => Task.CompletedTask), Throws.ArgumentNullException);
 
-            var observable = new Subject<int>();
-            Assert.That(() => observable.SubscribeAsync(null), Throws.ArgumentNullException);
+                var observable = new Subject<int>();
+                Assert.That(() => observable.SubscribeAsync(null), Throws.ArgumentNullException);
+            }
         }
 
         [Test]
@@ -59,11 +62,11 @@ namespace Mercurio.Tests.Extensions
 
             await Task.Delay(10);
 
-            Assert.Multiple(() =>
+            using (Assert.EnterMultipleScope())
             {
                 Assert.That(results, Is.EqualTo(new[] { 1, 2 }));
                 Assert.That(completed, Is.True);
-            });
+            };
         }
 
         [Test]

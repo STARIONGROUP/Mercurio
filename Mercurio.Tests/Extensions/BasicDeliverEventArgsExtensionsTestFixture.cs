@@ -20,11 +20,12 @@
 
 namespace Mercurio.Tests.Extensions
 {
-    using Mercurio.Extensions;
-    using RabbitMQ.Client;
-
     using System.Collections.Generic;
     using System.Text;
+
+    using Mercurio.Extensions;
+
+    using RabbitMQ.Client;
 
     [TestFixture]
     public class BasicDeliverEventArgsExtensionsTestFixture
@@ -32,11 +33,14 @@ namespace Mercurio.Tests.Extensions
         [Test]
         public void VerifyNullArgumentsThrow()
         {
-            IReadOnlyBasicProperties properties = null;
-            Assert.That(() => properties.TryReadHeader<string>("header", out _), Throws.ArgumentNullException);
+            using (Assert.EnterMultipleScope())
+            {
+                IReadOnlyBasicProperties properties = null;
+                Assert.That(() => properties.TryReadHeader<string>("header", out _), Throws.ArgumentNullException);
 
-            var basicProperties = new BasicProperties();
-            Assert.That(() => basicProperties.TryReadHeader<string>(null, out _), Throws.ArgumentNullException);
+                var basicProperties = new BasicProperties();
+                Assert.That(() => basicProperties.TryReadHeader<string>(null, out _), Throws.ArgumentNullException);
+            }
         }
 
         [Test]
@@ -51,13 +55,16 @@ namespace Mercurio.Tests.Extensions
                 }
             };
 
-            Assert.That(properties.TryReadHeader<string>("string", out var text), Is.True);
-            Assert.That(text, Is.EqualTo("value"));
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(properties.TryReadHeader<string>("string", out var text), Is.True);
+                Assert.That(text, Is.EqualTo("value"));
 
-            Assert.That(properties.TryReadHeader<string>("bytes", out var fromBytes), Is.True);
-            Assert.That(fromBytes, Is.EqualTo("hello"));
+                Assert.That(properties.TryReadHeader<string>("bytes", out var fromBytes), Is.True);
+                Assert.That(fromBytes, Is.EqualTo("hello"));
 
-            Assert.That(properties.TryReadHeader<string>("missing", out _), Is.False);
+                Assert.That(properties.TryReadHeader<string>("missing", out _), Is.False);
+            }
         }
     }
 }
