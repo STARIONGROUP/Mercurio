@@ -111,13 +111,13 @@ namespace Mercurio.Tests.Extensions
             var serviceProvider = this.serviceCollection.BuildServiceProvider();
             var connectionProvider = serviceProvider.GetRequiredService<IRabbitMqConnectionProvider>();
 
-            await Assert.MultipleAsync(async () =>
+            using (Assert.EnterMultipleScope())
             {
                 await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("Primary"), Throws.Exception.TypeOf<BrokerUnreachableException>());
                 await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("Secondary"), Throws.Exception.TypeOf<BrokerUnreachableException>());
                 await Assert.ThatAsync(() => connectionProvider.GetConnectionAsync("NonRegister"), Throws.ArgumentException);
                 Assert.That(() => ((IDisposable)connectionProvider).Dispose(), Throws.Nothing);
-            });
+            };
         }
 
         [Test]
@@ -151,7 +151,7 @@ namespace Mercurio.Tests.Extensions
             var serviceProvider = this.serviceCollection.BuildServiceProvider();
             var deserializers = serviceProvider.GetService<IDictionary<string, IMessageDeserializerService>>();
 
-            Assert.Multiple(() =>
+            using (Assert.EnterMultipleScope())
             {
                 Assert.That(serviceProvider.GetKeyedService<IMessageSerializerService>(SupportedSerializationFormat.Unspecified), Is.InstanceOf<MessagePackSerializer>());
                 Assert.That(deserializers, Has.Count.EqualTo(3));
@@ -162,7 +162,7 @@ namespace Mercurio.Tests.Extensions
                 Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer("application/json"), Is.InstanceOf<NewtonSoftSerializer>());
                 Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveSerializer(), Is.InstanceOf<MessagePackSerializer>());
                 Assert.That(() => serviceProvider.GetRequiredService<ISerializationProviderService>().ResolveDeserializer(), Is.InstanceOf<MessagePackSerializer>());
-            });
+            };
         }
 
         private class MessagePackSerializer : IMessageSerializerService, IMessageDeserializerService
