@@ -27,6 +27,8 @@ namespace Mercurio.Tests
     [SetUpFixture]
     public class RabbitMqContainerSetupFixture
     {
+        public static RabbitMqContainer RabbitMqContainer { get; private set; }
+
         [OneTimeSetUp]
         public async Task Setup()
         {
@@ -38,8 +40,6 @@ namespace Mercurio.Tests
 
             await RabbitMqContainer.StartAsync();
         }
-
-        public static RabbitMqContainer RabbitMqContainer { get; private set; }
 
         [OneTimeTearDown]
         public async Task Teardown()
