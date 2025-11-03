@@ -18,7 +18,7 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Hosting.Tests
+namespace Mercurio.Tests
 {
     using System.Reactive.Linq;
     using System.Reactive.Subjects;

@@ -61,10 +61,8 @@ namespace Mercurio.Tests.Messaging
                 {
                     var connectionFactory = new ConnectionFactory
                     {
-                        HostName = "localhost",
-                        Port = 5672,
-                        UserName = "guest",
-                        Password = "guest"
+                        HostName = RabbitMqContainerSetupFixture.RabbitMqContainer.Hostname,
+                        Port = RabbitMqContainerSetupFixture.RabbitMqContainer.GetMappedPublicPort()
                     };
                     
                     return connectionFactory;
@@ -73,10 +71,8 @@ namespace Mercurio.Tests.Messaging
                 {
                     var connectionFactory = new ConnectionFactory
                     {
-                        HostName = "localhost",
-                        Port = 5672,
-                        UserName = "guest",
-                        Password = "guest"
+                        HostName = RabbitMqContainerSetupFixture.RabbitMqContainer.Hostname,
+                        Port = RabbitMqContainerSetupFixture.RabbitMqContainer.GetMappedPublicPort()
                     };
                     
                     return connectionFactory;

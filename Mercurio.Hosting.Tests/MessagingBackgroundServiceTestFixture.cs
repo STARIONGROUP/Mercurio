@@ -18,9 +18,10 @@
 //  </copyright>
 //  ------------------------------------------------------------------------------------------------
 
-namespace Mercurio.Hosting.Tests
+namespace Mercurio.Tests
 {
     using Mercurio.Extensions;
+    using Mercurio.Hosting;
     using Mercurio.Messaging;
     using Mercurio.Model;
 
@@ -32,8 +33,6 @@ namespace Mercurio.Hosting.Tests
 
     using RabbitMQ.Client;
 
-    using Testcontainers.RabbitMq;
-
     [TestFixture]
     [Category("Integration")]
     [NonParallelizable]
@@ -44,25 +43,6 @@ namespace Mercurio.Hosting.Tests
         private Mock<IConfiguration> configurationMock;
         private TestMessagingBackgroundService backgroundService;
         private ServiceProvider serviceProvider;
-        private RabbitMqContainer rabbitMqContainer;
-
-        [OneTimeSetUp]
-        public async Task OneTimeSetup()
-        {
-            this.rabbitMqContainer = new RabbitMqBuilder()
-                .WithImage("rabbitmq:4.2.0-alpine")
-                .WithUsername("guest")
-                .WithPassword("guest")
-                .Build();
-
-            await this.rabbitMqContainer.StartAsync();
-        }
-
-        [OneTimeTearDown]
-        public async Task OneTimeTeardown()
-        {
-            await this.rabbitMqContainer.DisposeAsync();
-        }
         
         [SetUp]
         public void Setup()
@@ -75,8 +55,8 @@ namespace Mercurio.Hosting.Tests
                 {
                     var connectionFactory = new ConnectionFactory()
                     {
-                        HostName = this.rabbitMqContainer.Hostname,
-                        Port = this.rabbitMqContainer.GetMappedPublicPort(),
+                        HostName = RabbitMqContainerSetupFixture.RabbitMqContainer.Hostname,
+                        Port = RabbitMqContainerSetupFixture.RabbitMqContainer.GetMappedPublicPort()
                     };
                     
                     return connectionFactory;
@@ -279,7 +259,7 @@ namespace Mercurio.Hosting.Tests
             }
 
             /// <summary>
-            /// Initializes this service (e.g. to set the <see cref="ConnectionName" /> and register subscriptions
+            /// Initializes this service (e.g. to set the <see cref="MessagingBackgroundService.ConnectionName" /> and register subscriptions
             /// </summary>
             /// <returns>An awaitable <see cref="Task" /></returns>
             protected override async Task InitializeAsync()

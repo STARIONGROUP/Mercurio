@@ -6,6 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
+        <RootNamespace>Mercurio.Tests</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
@@ -26,7 +27,7 @@
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Testcontainers.RabbitMq" Version="4.8.1" />
+        <PackageReference Include="Testcontainers.RabbitMq" Version="4.8.1" />
     </ItemGroup>
 
     <ItemGroup>
@@ -34,7 +35,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Mercurio.Hosting\Mercurio.Hosting.csproj" />
+            <ProjectReference Include="..\Mercurio.Hosting\Mercurio.Hosting.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Include="..\Mercurio.Core.Tests\RabbitMqContainerSetupFixture.cs">
+        <Link>RabbitMqContainerSetupFixture.cs</Link>
+      </Compile>
     </ItemGroup>
 
 </Project>
