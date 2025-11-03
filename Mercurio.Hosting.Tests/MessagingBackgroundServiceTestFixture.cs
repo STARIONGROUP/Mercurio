@@ -32,6 +32,8 @@ namespace Mercurio.Hosting.Tests
 
     using RabbitMQ.Client;
 
+    using Testcontainers.RabbitMq;
+
     [TestFixture]
     [Category("Integration")]
     [NonParallelizable]
@@ -42,7 +44,28 @@ namespace Mercurio.Hosting.Tests
         private Mock<IConfiguration> configurationMock;
         private TestMessagingBackgroundService backgroundService;
         private ServiceProvider serviceProvider;
+        private RabbitMqContainer rabbitMqContainer;
 
+        [OneTimeSetUp]
+        public async Task OneTimeSetup()
+        {
+            this.rabbitMqContainer = new RabbitMqBuilder()
+                .WithImage("rabbitmq:4.2.0-alpine")
+                .WithUsername("guest")
+                .WithPassword("guest")
+                .Build();
+
+            await this.rabbitMqContainer.StartAsync();
+
+            await Task.Delay(10000);
+        }
+
+        [OneTimeTearDown]
+        public async Task OneTimeTeardown()
+        {
+            await this.rabbitMqContainer.DisposeAsync();
+        }
+        
         [SetUp]
         public void Setup()
         {
@@ -54,8 +77,8 @@ namespace Mercurio.Hosting.Tests
                 {
                     var connectionFactory = new ConnectionFactory()
                     {
-                        HostName = "localhost",
-                        Port = 5672
+                        HostName = this.rabbitMqContainer.Hostname,
+                        Port = this.rabbitMqContainer.GetMappedPublicPort(),
                     };
                     
                     return connectionFactory;
@@ -83,7 +106,7 @@ namespace Mercurio.Hosting.Tests
         {
             using var cancellationTokenSource = new CancellationTokenSource();
             _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
-            await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
 
             string[] messages = ["ABC", "DEF", "GHI"];
 
