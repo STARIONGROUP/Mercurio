@@ -265,6 +265,7 @@ namespace Mercurio.Messaging
                     {
                         observer.OnNext(response);
                         activity?.SetStatus(ActivityStatusCode.Ok);
+                        observer.OnCompleted();
                     }
                 }
                 catch (Exception exception)
