@@ -56,8 +56,6 @@ namespace Mercurio.Hosting.Tests
                 .Build();
 
             await this.rabbitMqContainer.StartAsync();
-
-            await Task.Delay(10000);
         }
 
         [OneTimeTearDown]
