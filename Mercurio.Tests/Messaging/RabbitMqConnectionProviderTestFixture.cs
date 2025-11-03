@@ -25,6 +25,7 @@ namespace Mercurio.Tests.Messaging
     using Mercurio.Configuration.IConfiguration;
     using Mercurio.Provider;
 
+    using Microsoft.Extensions.Logging.Abstractions;
     using Microsoft.Extensions.Options;
 
     using Moq;
@@ -59,9 +60,13 @@ namespace Mercurio.Tests.Messaging
             mockConfig.Setup(c => c.PoolSize).Returns(10);
 
             mockConfig.Setup(c => c.ConnectionFactory)
-                .Returns(_ => Task.FromResult(new ConnectionFactory()));
+                .Returns(_ => Task.FromResult(new ConnectionFactory()
+                {
+                    HostName = RabbitMqContainerSetupFixture.RabbitMqContainer.Hostname,
+                    Port = RabbitMqContainerSetupFixture.RabbitMqContainer.GetMappedPublicPort()
+                }));
 
-            this.service = new RabbitMqConnectionProvider(null, mockServiceProvider.Object, [mockConfig.Object],
+            this.service = new RabbitMqConnectionProvider(NullLogger<RabbitMqConnectionProvider>.Instance, mockServiceProvider.Object, [mockConfig.Object],
                 Options.Create(new RetryPolicyConfiguration { MaxConnectionRetryAttempts = 1 }));
 
             await Task.CompletedTask;

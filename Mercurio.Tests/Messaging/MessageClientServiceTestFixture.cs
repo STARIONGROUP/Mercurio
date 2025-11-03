@@ -64,10 +64,8 @@ namespace Mercurio.Tests.Messaging
                 {
                     var connectionFactory = new ConnectionFactory
                     {
-                        HostName = "localhost",
-                        Port = 5672,
-                        UserName = "guest",
-                        Password = "guest"
+                        HostName = RabbitMqContainerSetupFixture.RabbitMqContainer.Hostname,
+                        Port = RabbitMqContainerSetupFixture.RabbitMqContainer.GetMappedPublicPort()
                     };
                     
                     return connectionFactory;
@@ -76,10 +74,8 @@ namespace Mercurio.Tests.Messaging
                 {
                     var connectionFactory = new ConnectionFactory
                     {
-                        HostName = "localhost",
-                        Port = 5672,
-                        UserName = "guest",
-                        Password = "guest",
+                        HostName = RabbitMqContainerSetupFixture.RabbitMqContainer.Hostname,
+                        Port = RabbitMqContainerSetupFixture.RabbitMqContainer.GetMappedPublicPort()
                     };
 
                     return connectionFactory;
@@ -159,13 +155,13 @@ namespace Mercurio.Tests.Messaging
                 }));
             }
 
-            await Task.Delay(100);
+            await Task.Delay(200);
 
             var producers = Enumerable.Range(0, producerCount).Select(async _ =>
             {
                 for (var pushIndex = 0; pushIndex < pushRepetitions; pushIndex++)
                 {
-                    await this.firstService.PushAsync(FirstConnectionName, message, new FanoutExchangeConfiguration(exchangeName));
+                    await this.secondService.PushAsync(SecondConnectionName, message, new FanoutExchangeConfiguration(exchangeName));
                 }
             });
 

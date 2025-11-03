@@ -5,6 +5,7 @@
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <IsPackable>false</IsPackable>
+        <RootNamespace>Mercurio.Tests</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
@@ -36,6 +37,7 @@
         <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.12.0" />
         <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.12.0" />
         <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.12.0" />
+        <PackageReference Include="Testcontainers.RabbitMq" Version="4.8.1" />
     </ItemGroup>
 
     <ItemGroup>
@@ -44,6 +46,12 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Mercurio\Mercurio.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="..\Mercurio.Core.Tests\RabbitMqContainerSetupFixture.cs">
+            <Link>RabbitMqContainerSetupFixture.cs</Link>
+        </Compile>
     </ItemGroup>
 
 </Project>
