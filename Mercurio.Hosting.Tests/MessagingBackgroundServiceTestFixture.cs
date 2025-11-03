@@ -38,6 +38,7 @@ namespace Mercurio.Hosting.Tests
     public class MessagingBackgroundServiceTestFixture
     {
         private const string ConfiguredConnectionName = "RabbitMQ";
+        private const string RpcServerQueueName = "RPC";
         private Mock<IConfiguration> configurationMock;
         private TestMessagingBackgroundService backgroundService;
         private ServiceProvider serviceProvider;
@@ -62,6 +63,8 @@ namespace Mercurio.Hosting.Tests
                 .WithSerialization();
 
             serviceCollection.AddScoped<IMessageClientService, MessageClientService>();
+            serviceCollection.AddScoped<IRpcServerService, RpcServerService>();
+            serviceCollection.AddScoped<IRpcClientService<bool>, RpcClientService<bool>>();
             serviceCollection.AddLogging();
             this.serviceProvider = serviceCollection.BuildServiceProvider();
             
@@ -145,6 +148,36 @@ namespace Mercurio.Hosting.Tests
             await Assert.ThatAsync(() => invalidService.StartAsync(CancellationToken.None), Throws.InvalidOperationException);
         }
 
+        [Test]
+        public async Task VerifyRpcServer()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+
+            var rpcBackground = new TestRpcServerBackgrounService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<TestRpcServerBackgrounService>>(), this.configurationMock.Object);
+            _ = rpcBackground.StartAsync(cancellationTokenSource.Token);
+
+            var client = this.serviceProvider.GetRequiredService<IRpcClientService<bool>>();
+            
+            var rpcObservable = await client.SendRequestAsync(ConfiguredConnectionName, RpcServerQueueName, 45, cancellationToken: cancellationTokenSource.Token);
+            var taskCompletion = new TaskCompletionSource<bool>();
+            rpcObservable.Subscribe(result => taskCompletion.SetResult(result));
+            await Task.Delay(50, cancellationTokenSource.Token);
+            
+            await taskCompletion.Task;
+            Assert.That(taskCompletion.Task.Result, Is.False);
+            
+            rpcObservable = await client.SendRequestAsync(ConfiguredConnectionName, RpcServerQueueName, 44, cancellationToken: cancellationTokenSource.Token);
+            var newTaskCompletion = new TaskCompletionSource<bool>();
+            rpcObservable.Subscribe(result => newTaskCompletion.SetResult(result));
+            await Task.Delay(50, cancellationTokenSource.Token);
+            
+            await taskCompletion.Task;
+            Assert.That(newTaskCompletion.Task.Result, Is.True);
+            await cancellationTokenSource.CancelAsync();
+            rpcBackground.Dispose();
+            client.Dispose();
+        }
+
         private class InvalidInitializationBackgroundService : MessagingBackgroundService
         {
             /// <summary>
@@ -204,8 +237,40 @@ namespace Mercurio.Hosting.Tests
                 await this.RegisterAsyncListener(() => this.MessageClientService.ListenAsync<int>(this.ConnectionName, new DirectExchangeConfiguration("BackgroundTestInt")), (x) => 
                 {
                     this.ReceivedMessages.Add(x.ToString());
-                    return Task.CompletedTask; 
+                    return Task.CompletedTask;
                 }, onError: _ => this.ReceivedMessages.Clear());
+            }
+        }
+
+        public class TestRpcServerBackgrounService : RpcServerBackgroundService
+        {
+            /// <summary>
+            /// Initializes a new instance of the <see cref="RpcServerBackgroundService" />
+            /// </summary>
+            /// <param name="serviceProvider">
+            /// The injected <see cref="IServiceProvider" /> that allow to resolve
+            /// <see cref="IMessageClientService" /> instance, even if not registered as scope
+            /// </param>
+            /// <param name="logger">The injected <see cref="ILogger{TCategory}" /> to allow logging</param>
+            /// <param name="configuration">The injected <see cref="IConfiguration" /> to provides configuration information for service initialization</param>
+            public TestRpcServerBackgrounService(IServiceProvider serviceProvider, ILogger<TestRpcServerBackgrounService> logger, IConfiguration configuration) : base(serviceProvider, logger, configuration)
+            {
+            }
+
+            /// <summary>
+            /// Initializes this service (e.g. to set the <see cref="ConnectionName" /> and register subscriptions
+            /// </summary>
+            /// <returns>An awaitable <see cref="Task" /></returns>
+            protected override async Task InitializeAsync()
+            {
+                this.ConnectionName = ConfiguredConnectionName;
+                
+                this.RpcSubscriptions.Add(await this.RpcServerService.ListenForRequestAsync<int, bool>(this.ConnectionName, RpcServerQueueName, OnReceivedMessage));
+            }
+
+            private static Task<bool> OnReceivedMessage(int arg)
+            {
+                return Task.FromResult(arg%2 ==0);
             }
         }
     }
