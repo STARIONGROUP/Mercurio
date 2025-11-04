@@ -49,7 +49,8 @@ namespace Mercurio.Hosting
         protected RpcServerBackgroundService(IServiceProvider serviceProvider, ILogger<RpcServerBackgroundService> logger, IConfiguration configuration)
             : base(serviceProvider, logger, configuration)
         {
-            this.RpcServerService = this.ServiceProvider.GetRequiredService<IRpcServerService>();
+            using var scope = this.ServiceProvider.CreateScope();
+            this.RpcServerService = scope.ServiceProvider.GetService<IRpcServerService>();
         }
 
         /// <summary>
