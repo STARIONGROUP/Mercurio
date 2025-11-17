@@ -3,8 +3,8 @@ message: "If you use this software, please cite it as below."
 
 title: "Mercurio"
 abstract: "A library to make RabbitMQ integration in .NET microservices seamless"
-version: "1.9.0"
-date-released: "2025-11-04"
+version: "2.0.0"
+date-released: "2025-11-17"
 url: "https://github.com/STARIONGROUP/Mercurio"
 
 authors:
@@ -46,6 +46,6 @@ preferred-citation:
     - name: "Starion Group S.A."
       affiliation: "Starion Group S.A."
       given-names: "MBSE Competence Area Developers"
-  version: "1.9.0"
+  version: "2.0.0"
   url: "https://github.com/STARIONGROUP/Mercurio"
-  date-released: "2025-11-04"
+  date-released: "2025-11-17"
