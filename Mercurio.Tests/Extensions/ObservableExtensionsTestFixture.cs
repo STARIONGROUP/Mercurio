@@ -36,10 +36,10 @@ namespace Mercurio.Tests.Extensions
             using (Assert.EnterMultipleScope())
             {
                 IObservable<int> source = null;
-                Assert.That(() => source.SubscribeAsync(_ => Task.CompletedTask), Throws.ArgumentNullException);
+                Assert.That(() => source.SubscribeSafeAsync(_ => Task.CompletedTask), Throws.ArgumentNullException);
 
                 var observable = new Subject<int>();
-                Assert.That(() => observable.SubscribeAsync(null), Throws.ArgumentNullException);
+                Assert.That(() => observable.SubscribeSafeAsync(null), Throws.ArgumentNullException);
             }
         }
 
@@ -50,7 +50,7 @@ namespace Mercurio.Tests.Extensions
             var completed = false;
             var subject = new Subject<int>();
 
-            using var subscription = subject.SubscribeAsync(x =>
+            using var subscription = subject.SubscribeSafeAsync(x =>
             {
                 results.Add(x);
                 return Task.CompletedTask;
@@ -75,7 +75,7 @@ namespace Mercurio.Tests.Extensions
             var subject = new Subject<int>();
             Exception captured = null;
 
-            using var subscription = subject.SubscribeAsync(_ => Task.FromException(new InvalidOperationException("boom")), ex => captured = ex);
+            using var subscription = subject.SubscribeSafeAsync(_ => Task.FromException(new InvalidOperationException("boom")), ex => captured = ex);
 
             subject.OnNext(1);
 
