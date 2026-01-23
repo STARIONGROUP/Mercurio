@@ -262,7 +262,7 @@ namespace Mercurio.Hosting
             var key = Guid.NewGuid();
 
             var observable = await observableFunction();
-            var subscription = observable.SubscribeSafe(onReceive, x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted);
+            var subscription = observable.SubscribeSafe(onReceive,onNextError:onError, onObservableError: x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted: onCompleted);
             this.subscriptions[key] = subscription;
         }
 
@@ -285,7 +285,7 @@ namespace Mercurio.Hosting
             var key = Guid.NewGuid();
 
             var observable = await observableFunction();
-            var subscription = observable.SubscribeSafeAsync(onReceive, x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted);
+            var subscription = observable.SubscribeSafeAsync(onReceive, onNextError: onError,onObservableError: x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted: onCompleted);
             this.subscriptions[key] = subscription;
         }
 

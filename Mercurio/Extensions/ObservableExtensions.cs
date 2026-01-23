@@ -33,12 +33,13 @@ namespace Mercurio.Extensions
         /// <typeparam name="T">An object</typeparam>
         /// <param name="source">The source <see cref="IObservable{T}" /></param>
         /// <param name="onNextAsync">The <see cref="Func{TResult,UResult}" /> to call</param>
-        /// <param name="onError">An optional <see cref="Action{T}" /> to handle exception</param>
+        /// <param name="onNextError">An optional <see cref="Action{T}" /> to handle exception thrown by the <paramref name="onNextAsync"/></param>
+        /// <param name="onObservableError">An optional <see cref="Action{T}" /> to handle exception thrown by the <paramref name="source"/></param>
         /// <param name="onCompleted">An optional <see cref="Action" /> to handle completed action</param>
         /// <exception cref="ArgumentNullException">If one of the provided <paramref name="source"/> or <paramref name="onNextAsync"/>
         /// is null</exception>
         /// <returns>The created <see cref="IDisposable" /></returns>
-        public static IDisposable SubscribeSafeAsync<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Action<Exception> onError = null,
+        public static IDisposable SubscribeSafeAsync<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Action<Exception> onNextError = null, Action<Exception> onObservableError = null,
             Action onCompleted = null)
         {
             if (source == null)
@@ -59,11 +60,11 @@ namespace Mercurio.Extensions
                     }
                     catch (Exception e)
                     {
-                        onError?.Invoke(e);
+                        onNextError?.Invoke(e);
                         return Task.CompletedTask;
                     }
                 })).Concat()
-                .Subscribe(_ => { }, onError ?? (_ => { }), onCompleted ?? (() => { }));
+                .Subscribe(_ => { }, onObservableError ?? (_ => { }), onCompleted ?? (() => { }));
         }
 
         /// <summary>
@@ -72,12 +73,13 @@ namespace Mercurio.Extensions
         /// <typeparam name="T">An object</typeparam>
         /// <param name="source">The source <see cref="IObservable{T}" /></param>
         /// <param name="onNext">The <see cref="Action{T}" /> to call</param>
-        /// <param name="onError">An optional <see cref="Action{T}" /> to handle exception</param>
+        /// <param name="onNextError">An optional <see cref="Action{T}" /> to handle exception thrown by the <paramref name="onNext"/></param>
+        /// <param name="onObservableError">An optional <see cref="Action{T}" /> to handle exception thrown by the <paramref name="source"/></param>
         /// <param name="onCompleted">An optional <see cref="Action" /> to handle completed action</param>
         /// <exception cref="ArgumentNullException">If one of the provided <paramref name="source"/> or <paramref name="onNext"/>
         /// is null</exception>
         /// <returns>The created <see cref="IDisposable" /></returns>
-        public static IDisposable SubscribeSafe<T>(this IObservable<T> source, Action<T> onNext, Action<Exception> onError = null, Action onCompleted = null)
+        public static IDisposable SubscribeSafe<T>(this IObservable<T> source, Action<T> onNext, Action<Exception> onNextError = null, Action<Exception> onObservableError = null, Action onCompleted = null)
         {
             if (source == null)
             {
@@ -97,9 +99,9 @@ namespace Mercurio.Extensions
                 }
                 catch (Exception e)
                 {
-                    onError?.Invoke(e);
+                    onNextError?.Invoke(e);
                 }
-            }, onError ?? (_ => { }), onCompleted ?? (() => { }));
+            }, onObservableError ?? (_ => { }), onCompleted ?? (() => { }));
         }
     }
 }

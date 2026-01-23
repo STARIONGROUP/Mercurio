@@ -75,7 +75,7 @@ namespace Mercurio.Tests.Extensions
             var subject = new Subject<int>();
             Exception captured = null;
 
-            using var subscription = subject.SubscribeSafeAsync(_ => Task.FromException(new InvalidOperationException("boom")), ex => captured = ex);
+            using var subscription = subject.SubscribeSafeAsync(_ => Task.FromException(new InvalidOperationException("boom")), onObservableError: ex => captured = ex);
 
             subject.OnNext(1);
 
