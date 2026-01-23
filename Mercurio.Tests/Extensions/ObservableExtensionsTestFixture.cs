@@ -37,9 +37,11 @@ namespace Mercurio.Tests.Extensions
             {
                 IObservable<int> source = null;
                 Assert.That(() => source.SubscribeSafeAsync(_ => Task.CompletedTask), Throws.ArgumentNullException);
+                Assert.That(() => source.SubscribeSafe(_ => { }), Throws.ArgumentNullException);
 
                 var observable = new Subject<int>();
                 Assert.That(() => observable.SubscribeSafeAsync(null), Throws.ArgumentNullException);
+                Assert.That(() => observable.SubscribeSafe(onNext: null), Throws.ArgumentNullException);
             }
         }
 
