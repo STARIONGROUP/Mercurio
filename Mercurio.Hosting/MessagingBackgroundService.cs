@@ -232,7 +232,7 @@ namespace Mercurio.Hosting
                     this.Logger.LogError(exception, "Error occured while processing a message");
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(10), stoppingToken);
+                await Task.Delay(TimeSpan.FromMilliseconds(5), stoppingToken);
             }
 
             this.IsHealthy = false;
@@ -262,7 +262,7 @@ namespace Mercurio.Hosting
             var key = Guid.NewGuid();
 
             var observable = await observableFunction();
-            var subscription = observable.Subscribe(onReceive, x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted);
+            var subscription = observable.SubscribeSafe(onReceive,onNextError:onError, onObservableError: x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted: onCompleted);
             this.subscriptions[key] = subscription;
         }
 
@@ -285,7 +285,7 @@ namespace Mercurio.Hosting
             var key = Guid.NewGuid();
 
             var observable = await observableFunction();
-            var subscription = observable.SubscribeAsync(onReceive, x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted);
+            var subscription = observable.SubscribeSafeAsync(onReceive, onNextError: onError,onObservableError: x => _ = this.HandleErrorAndRecover(x, observableFunction, onReceive, onError, onCompleted, key), onCompleted: onCompleted);
             this.subscriptions[key] = subscription;
         }
 

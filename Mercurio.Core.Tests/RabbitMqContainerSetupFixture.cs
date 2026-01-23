@@ -32,8 +32,7 @@ namespace Mercurio.Tests
         [OneTimeSetUp]
         public async Task Setup()
         {
-            RabbitMqContainer = new RabbitMqBuilder()
-                .WithImage("rabbitmq:4.2.0-alpine")
+            RabbitMqContainer = new RabbitMqBuilder("rabbitmq:4.2.0-alpine")
                 .WithUsername("guest")
                 .WithPassword("guest")
                 .Build();
