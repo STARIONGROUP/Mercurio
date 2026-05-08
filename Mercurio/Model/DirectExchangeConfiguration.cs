@@ -98,7 +98,7 @@ namespace Mercurio.Model
                 return;
             }
 
-            var queueDeclared = await channel.QueueDeclareAsync(this.QueueName, false, false, this.IsTemporary);
+            var queueDeclared = await channel.QueueDeclareAsync(base.QueueName, durable: !base.IsTemporary, exclusive: base.IsTemporary, base.IsTemporary);
             this.QueueName = queueDeclared.QueueName;
 
             if (!string.IsNullOrWhiteSpace(this.ExchangeName))
