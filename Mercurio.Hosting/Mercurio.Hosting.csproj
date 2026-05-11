@@ -4,7 +4,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>disable</Nullable>
         <TargetFrameworks>net10.0;net9.0;net8.0;netstandard2.1</TargetFrameworks>
-        <Version>2.0.2</Version>
+        <Version>2.0.4</Version>
         <LangVersion>12.0</LangVersion>
         <Company>Starion Group S.A.</Company>
         <Copyright>Copyright © Starion Group S.A.</Copyright>
@@ -28,9 +28,9 @@
         <GenerateSBOM>true</GenerateSBOM>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>
-            [Update] to Mercurio version 2.0.2
-            [Update] Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions to version 10.0.3
-            [Update] Microsoft.Extensions.Diagnostics.Hossting to version 10.0.3
+            [Update] Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions to version 10.0.7
+            [Update] Microsoft.Extensions.Hosting to version 10.0.7
+            [Update] Mercurio to version 2.0.3
         </PackageReleaseNotes>
     </PropertyGroup>
 
@@ -45,8 +45,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.3" />
-      <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+      <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.7" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
       <PackageReference Include="Microsoft.Sbom.Targets" Version="4.1.5" PrivateAssets="all" />
     </ItemGroup>
 
