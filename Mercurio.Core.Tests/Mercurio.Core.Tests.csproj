@@ -11,7 +11,7 @@
 
     <ItemGroup>
         <PackageReference Include="NUnit" Version="4.5.0" />
-        <PackageReference Include="Testcontainers.RabbitMq" Version="4.10.0" />
+        <PackageReference Include="Testcontainers.RabbitMq" Version="4.11.0" />
     </ItemGroup>
 
 </Project>
