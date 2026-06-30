@@ -68,5 +68,39 @@ namespace Mercurio.Hosting
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
         void PushMessages<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Asynchronously pushes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, bypassing the internal background queue so the caller can
+        /// await completion and observe any publishing errors.
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /> that completes when the message has been published</returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        Task PushMessageAsync<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Asynchronously pushes the specified <paramref name="messages" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, bypassing the internal background queue so the caller can
+        /// await completion and observe any publishing errors.
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /> that completes when the messages have been published</returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        Task PushMessagesAsync<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
     }
 }

@@ -127,6 +127,55 @@ namespace Mercurio.Tests
         }
         
         [Test]
+        public async Task VerifyPushMessageAsync()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            var exchange = new FanoutExchangeConfiguration("BackgroundTestPushAsync");
+
+            await this.backgroundService.PushMessageAsync("ABC", exchange, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            var faultyService = new TestMessagingBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<TestMessagingBackgroundService>>(), this.configurationMock.Object);
+
+            await Assert.ThatAsync(() => faultyService.PushMessageAsync("XYZ", exchange, cancellationToken: cancellationTokenSource.Token), Throws.Exception);
+            faultyService.Dispose();
+
+            await cancellationTokenSource.CancelAsync();
+
+            Assert.That(this.backgroundService.ReceivedMessages, Does.Contain("ABC"));
+        }
+
+        [Test]
+        public async Task VerifyPushMessagesAsync()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            var exchange = new FanoutExchangeConfiguration("BackgroundTestPushAsync");
+            string[] messages = ["ABC", "DEF", "GHI"];
+
+            await this.backgroundService.PushMessagesAsync(messages, exchange, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(800), CancellationToken.None);
+
+            var faultyService = new TestMessagingBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<TestMessagingBackgroundService>>(), this.configurationMock.Object);
+
+            await Assert.ThatAsync(() => faultyService.PushMessagesAsync(messages, exchange, cancellationToken: cancellationTokenSource.Token), Throws.Exception);
+            faultyService.Dispose();
+
+            await cancellationTokenSource.CancelAsync();
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(this.backgroundService.ReceivedMessages, Has.Count.EqualTo(3));
+                Assert.That(this.backgroundService.ReceivedMessages, Is.EquivalentTo(messages));
+            }
+        }
+
+        [Test]
         public async Task VerifyBackgroundServiceBehaviourTaskCanceled()
         {
             using var cancellationTokenSource = new CancellationTokenSource();
@@ -335,8 +384,9 @@ namespace Mercurio.Tests
             {
                 this.ConnectionName = ConfiguredConnectionName;
                 await this.RegisterListener(() => this.MessageClientService.ListenAsync<string>(this.ConnectionName, new FanoutExchangeConfiguration("BackgroundTest")), this.ReceivedMessages.Add, onError: _ => this.ReceivedMessages.Clear());
-                
-                await this.RegisterAsyncListener(() => this.MessageClientService.ListenAsync<int>(this.ConnectionName, new DirectExchangeConfiguration("BackgroundTestInt")), (x) => 
+                await this.RegisterListener(() => this.MessageClientService.ListenAsync<string>(this.ConnectionName, new FanoutExchangeConfiguration("BackgroundTestPushAsync")), this.ReceivedMessages.Add, onError: _ => this.ReceivedMessages.Clear());
+
+                await this.RegisterAsyncListener(() => this.MessageClientService.ListenAsync<int>(this.ConnectionName, new DirectExchangeConfiguration("BackgroundTestInt")), (x) =>
                 {
                     this.ReceivedMessages.Add(x.ToString());
                     return Task.CompletedTask;

@@ -163,6 +163,52 @@ namespace Mercurio.Hosting
         }
 
         /// <summary>
+        /// Asynchronously pushes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, bypassing the internal background queue so the caller can
+        /// await completion and observe any publishing errors.
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /> that completes when the message has been published</returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public async Task PushMessageAsync<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            var activitySource = this.connectionProvider.GetRegisteredActivitySource(this.ConnectionName);
+            var activityName = $"Background Push {typeof(TMessage).Name} [{exchangeConfiguration}]";
+            using var activity = activitySource?.StartActivity(activityName, ActivityKind.Producer, Activity.Current?.Context ?? default);
+            await this.MessageClientService.PushAsync(this.ConnectionName, message, exchangeConfiguration, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
+        /// Asynchronously pushes the specified <paramref name="messages" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, bypassing the internal background queue so the caller can
+        /// await completion and observe any publishing errors.
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /> that completes when the messages have been published</returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        public async Task PushMessagesAsync<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            var activitySource = this.connectionProvider.GetRegisteredActivitySource(this.ConnectionName);
+            var activityName = $"Background Push Multiple {typeof(TMessage).Name} [{exchangeConfiguration}]";
+            using var activity = activitySource?.StartActivity(activityName, ActivityKind.Producer, Activity.Current?.Context ?? default);
+            await this.MessageClientService.PushAsync(this.ConnectionName, messages, exchangeConfiguration, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
         /// Triggered when the application host is ready to start the service.
         /// </summary>
         /// <param name="cancellationToken">Indicates that the start process has been aborted.</param>
