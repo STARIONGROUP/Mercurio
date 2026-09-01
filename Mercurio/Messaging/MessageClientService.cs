@@ -417,12 +417,25 @@ namespace Mercurio.Messaging
 
                 try
                 {
-                    using var stream = message.Body.AsStream();
-                    var content = await this.SerializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType).DeserializeAsync<TMessage>(stream, cancellationToken);
+                    TMessage content;
+
+                    try
+                    {
+                        await using var stream = message.Body.AsStream();
+                        content = await this.SerializationProviderService.ResolveDeserializer(message.BasicProperties.ContentType).DeserializeAsync<TMessage>(stream, cancellationToken);
+                    }
+                    catch (Exception deserializationException)
+                    {
+                        var invalidMessageException = new InvalidMessageException(typeof(TMessage), message, deserializationException);
+
+                        this.Logger.LogError(deserializationException, "The message received on {QueueName} could not be deserialized into a {MessageName}", exchangeConfiguration.QueueName, typeof(TMessage).Name);
+                        activity?.SetStatus(ActivityStatusCode.Error, invalidMessageException.Message);
+                        observer.OnError(invalidMessageException);
+                        return;
+                    }
+
                     observer.OnNext(content);
                     activity?.SetStatus(ActivityStatusCode.Ok);
-
-                    await Task.CompletedTask;
                 }
                 catch (Exception ex)
                 {
