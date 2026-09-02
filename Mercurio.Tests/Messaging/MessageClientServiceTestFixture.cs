@@ -211,8 +211,8 @@ namespace Mercurio.Tests.Messaging
             {
                 Assert.That(refused.IsError, Is.True, "the batch should stop at the first refused message");
                 Assert.That(refused.FirstError.Code, Is.EqualTo(MessagingErrors.NotAcknowledgedCode));
-                Assert.That(refused.FirstError.Metadata[MessagingErrors.PublishedCountMetadataKey], Is.EqualTo(0), "the queue is already full, so nothing of the batch got through");
-                Assert.That(refused.FirstError.Metadata[MessagingErrors.FailedIndexMetadataKey], Is.EqualTo(0));
+                Assert.That(refused.FirstError.Metadata[MessagingErrors.PublishedCountMetadataKey], Is.Zero, "the queue is already full, so nothing of the batch got through");
+                Assert.That(refused.FirstError.Metadata[MessagingErrors.FailedIndexMetadataKey], Is.Zero);
             }
         }
 
