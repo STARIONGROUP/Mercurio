@@ -213,7 +213,7 @@ namespace Mercurio.Tests
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(invalidMessageService.ReceivedMessages, Is.EquivalentTo(new[] { 42 }));
+                Assert.That(invalidMessageService.ReceivedMessages, Is.EquivalentTo([42]));
                 Assert.That(invalidMessageService.Errors, Is.Empty);
             }
 
@@ -222,7 +222,7 @@ namespace Mercurio.Tests
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(invalidMessageService.ReceivedMessages, Is.EquivalentTo(new[] { 42 }), "an invalid message is not delivered to the listener");
+                Assert.That(invalidMessageService.ReceivedMessages, Is.EquivalentTo([42]), "an invalid message is not delivered to the listener");
                 Assert.That(invalidMessageService.Errors, Has.Count.EqualTo(1), "the deserialization failure is reported to the onError callback");
                 Assert.That(invalidMessageService.Errors[0], Is.InstanceOf<InvalidMessageException>(), "the deserialization failure is reported as an InvalidMessageException");
             }
