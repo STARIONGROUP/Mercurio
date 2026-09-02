@@ -22,6 +22,8 @@ namespace Mercurio.Tests.Messaging
 {
     using System.Diagnostics.CodeAnalysis;
 
+    using ErrorOr;
+
     using Mercurio.Messaging;
     using Mercurio.Model;
     using Mercurio.Provider;
@@ -164,6 +166,38 @@ namespace Mercurio.Tests.Messaging
         /// <see cref="BasicProperties.ContentType" /> as 'application/json"
         /// </remarks>
         public override Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="message" /> to the specified queue via the <paramref name="exchangeConfiguration" />
+        /// and waits for the RabbitMQ server to acknowledge that it has taken responsibility for the message
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /></returns>
+        public override Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="messages" /> to the specified queue via the <paramref name="exchangeConfiguration" />
+        /// and waits for the RabbitMQ server to acknowledge that it has taken responsibility for each message
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /></returns>
+        public override Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

@@ -49,6 +49,22 @@ namespace Mercurio.Provider
         ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Asynchronously leases a channel from the pool or creates one if necessary.
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the leased channel has to support publisher confirmations, so that the RabbitMQ server acknowledges any
+        /// published message
+        /// </param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
+        /// <remarks>
+        /// Channels that support publisher confirmations are pooled separately, since the publisher confirmations can only be enabled
+        /// at the creation of the channel
+        /// </remarks>
+        ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, bool publisherConfirmationsEnabled, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Register a new <see cref="ConnectionFactory" /> that could be resolved to provide an <see cref="IConnection" />
         /// </summary>
         /// <param name="name">The registration name that should be used</param>

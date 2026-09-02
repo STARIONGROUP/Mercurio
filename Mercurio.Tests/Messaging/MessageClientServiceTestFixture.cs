@@ -20,6 +20,8 @@
 
 namespace Mercurio.Tests.Messaging
 {
+    using ErrorOr;
+
     using Mercurio.Extensions;
     using Mercurio.Messaging;
     using Mercurio.Model;
@@ -28,6 +30,7 @@ namespace Mercurio.Tests.Messaging
     using Microsoft.Extensions.Logging;
 
     using RabbitMQ.Client;
+    using RabbitMQ.Client.Exceptions;
 
     using System.Collections.Concurrent;
     using System.Diagnostics;
@@ -127,6 +130,115 @@ namespace Mercurio.Tests.Messaging
                 Assert.That(completedTask.Result, Is.EqualTo(expectedMessage.Dequeue()));
                 tasks.Remove(completedTask);
             }
+        }
+
+        [Test]
+        public async Task VerifyPushWithConfirmationAsync()
+        {
+            const string exchangeName = "ConfirmationExchange";
+            var exchangeConfiguration = new FanoutExchangeConfiguration(exchangeName);
+
+            var listenObservable = await this.secondService.ListenAsync<string>(SecondConnectionName, exchangeConfiguration);
+            var taskCompletion = new TaskCompletionSource<string>();
+            using var subscription = listenObservable.Subscribe(message => taskCompletion.TrySetResult(message));
+            await Task.Delay(TimeOut);
+
+            var acknowledged = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, FirstSentMessage, exchangeConfiguration);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(acknowledged.IsError, Is.False, "the RabbitMQ server should have acknowledged the message");
+                Assert.That(acknowledged.Value, Is.EqualTo(Result.Success));
+            }
+
+            var received = await Task.WhenAny(taskCompletion.Task, Task.Delay(2000));
+            Assert.That(received, Is.EqualTo(taskCompletion.Task), "an acknowledged message should still reach the listener");
+
+            var unregistered = await this.firstService.PushWithConfirmationAsync("UnregisteredConnection", FirstSentMessage, exchangeConfiguration);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(unregistered.IsError, Is.True, "an unregistered connection should be reported instead of being swallowed");
+                Assert.That(unregistered.FirstError.Code, Is.EqualTo(MessagingErrors.PublishFailedCode));
+                Assert.That(unregistered.FirstError.Metadata[MessagingErrors.ExceptionMetadataKey], Is.InstanceOf<Exception>());
+            }
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, (string)null, exchangeConfiguration), Throws.ArgumentNullException, "an invalid argument remains an exception");
+                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, FirstSentMessage, null), Throws.ArgumentNullException);
+            }
+
+            var rejectingConfiguration = await this.DeclareRejectPublishExchangeAsync("ConfirmationRejectExchange", "ConfirmationRejectQueue");
+
+            await this.firstService.PushWithConfirmationAsync(FirstConnectionName, FirstSentMessage, rejectingConfiguration);
+            var nacked = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, SecondSentMessage, rejectingConfiguration);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(nacked.IsError, Is.True, "a message the server refuses should be reported");
+                Assert.That(nacked.FirstError.Code, Is.EqualTo(MessagingErrors.NotAcknowledgedCode));
+                Assert.That(nacked.FirstError.Metadata[MessagingErrors.ExceptionMetadataKey], Is.InstanceOf<PublishException>());
+            }
+        }
+
+        [Test]
+        public async Task VerifyPushWithConfirmationMessagesAsync()
+        {
+            const string exchangeName = "ConfirmationCollectionExchange";
+            var exchangeConfiguration = new FanoutExchangeConfiguration(exchangeName);
+
+            // the cast is required: an array also binds to the single message overload, with TMessage being the array itself
+            IEnumerable<string> messages = ["ABC", "DEF", "GHI"];
+
+            var acknowledged = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, exchangeConfiguration);
+            Assert.That(acknowledged.IsError, Is.False, "the RabbitMQ server should have acknowledged every message");
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, (IEnumerable<string>)null, exchangeConfiguration), Throws.ArgumentException, "an invalid argument remains an exception");
+                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, null), Throws.ArgumentNullException);
+            }
+
+            var rejectingConfiguration = await this.DeclareRejectPublishExchangeAsync("ConfirmationCollectionRejectExchange", "ConfirmationCollectionRejectQueue");
+
+            var fillingTheQueue = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, "fills the queue", rejectingConfiguration);
+            Assert.That(fillingTheQueue.IsError, Is.False, "the rejecting queue accepts a single message before reaching its capacity");
+
+            var refused = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, rejectingConfiguration);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(refused.IsError, Is.True, "the batch should stop at the first refused message");
+                Assert.That(refused.FirstError.Code, Is.EqualTo(MessagingErrors.NotAcknowledgedCode));
+                Assert.That(refused.FirstError.Metadata[MessagingErrors.PublishedCountMetadataKey], Is.EqualTo(0), "the queue is already full, so nothing of the batch got through");
+                Assert.That(refused.FirstError.Metadata[MessagingErrors.FailedIndexMetadataKey], Is.EqualTo(0));
+            }
+        }
+
+        /// <summary>
+        /// Declares a fanout exchange bound to a queue that only accepts a single message, and that asks the RabbitMQ server to reject
+        /// any further publication instead of dropping the oldest message
+        /// </summary>
+        /// <param name="exchangeName">The name of the exchange to declare</param>
+        /// <param name="queueName">The name of the rejecting queue to declare</param>
+        /// <returns>The <see cref="FanoutExchangeConfiguration" /> that publishes to the declared exchange</returns>
+        private async Task<FanoutExchangeConfiguration> DeclareRejectPublishExchangeAsync(string exchangeName, string queueName)
+        {
+            await using var lease = await this.firstService.LeaseChannelAsync(FirstConnectionName);
+
+            await lease.Channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Fanout, true);
+            await lease.Channel.QueueDeleteAsync(queueName, false, false);
+
+            await lease.Channel.QueueDeclareAsync(queueName, false, false, false, new Dictionary<string, object>
+            {
+                { "x-max-length", 1 },
+                { "x-overflow", "reject-publish" }
+            });
+
+            await lease.Channel.QueueBindAsync(queueName, exchangeName, string.Empty);
+
+            return new FanoutExchangeConfiguration(exchangeName);
         }
 
         [Test]
