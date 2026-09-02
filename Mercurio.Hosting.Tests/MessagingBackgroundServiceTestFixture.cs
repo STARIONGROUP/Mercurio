@@ -20,6 +20,9 @@
 
 namespace Mercurio.Tests
 {
+    using System.Text.Json;
+
+    using Mercurio.Configuration.SerializationConfiguration;
     using Mercurio.Extensions;
     using Mercurio.Hosting;
     using Mercurio.Messaging;
@@ -40,6 +43,8 @@ namespace Mercurio.Tests
     {
         private const string ConfiguredConnectionName = "RabbitMQ";
         private const string RpcServerQueueName = "RPC";
+        private const string InvalidMessageExchangeName = "BackgroundTestInvalidMessage";
+        private const string InvalidMessageAsyncExchangeName = "BackgroundTestInvalidMessageAsync";
         private Mock<IConfiguration> configurationMock;
         private TestMessagingBackgroundService backgroundService;
         private ServiceProvider serviceProvider;
@@ -90,7 +95,7 @@ namespace Mercurio.Tests
 
             foreach (var message in messages)
             {
-                this.backgroundService.PushMessage(message,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
+                await this.backgroundService.PushMessageAsync(message,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
                 await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationTokenSource.Token);
             }
 
@@ -114,7 +119,7 @@ namespace Mercurio.Tests
 
             string[] messages = ["ABC", "DEF", "GHI"];
 
-            this.backgroundService.PushMessages(messages,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
+            await this.backgroundService.PushMessagesAsync(messages,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(TimeSpan.FromMilliseconds(1200), CancellationToken.None);
 
             await cancellationTokenSource.CancelAsync();
@@ -183,12 +188,75 @@ namespace Mercurio.Tests
             
             string[] messages = ["ABC", "DEF", "GHI"];
 
-            this.backgroundService.PushMessages(messages,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
+            await this.backgroundService.PushMessagesAsync(messages,new FanoutExchangeConfiguration("BackgroundTest"), cancellationToken: cancellationTokenSource.Token);
             await cancellationTokenSource.CancelAsync();
             
             await Task.Delay(TimeSpan.FromMilliseconds(1000), CancellationToken.None);
 
             Assert.That(this.backgroundService.ReceivedMessages, Is.Empty);
+        }
+
+        [Test]
+        public async Task VerifyInvalidMessageDeserialization()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+
+            var invalidMessageService = new InvalidMessageBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<InvalidMessageBackgroundService>>(), this.configurationMock.Object);
+            _ = invalidMessageService.StartAsync(cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            var exchangeConfiguration = new FanoutExchangeConfiguration(InvalidMessageExchangeName);
+            var messageClientService = this.serviceProvider.GetRequiredService<IMessageClientService>();
+
+            await messageClientService.PushAsync(ConfiguredConnectionName, 42, exchangeConfiguration, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(invalidMessageService.ReceivedMessages, Is.EquivalentTo([42]));
+                Assert.That(invalidMessageService.Errors, Is.Empty);
+            }
+
+            await messageClientService.PushAsync(ConfiguredConnectionName, "not a number", exchangeConfiguration, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(invalidMessageService.ReceivedMessages, Is.EquivalentTo([42]), "an invalid message is not delivered to the listener");
+                Assert.That(invalidMessageService.Errors, Has.Count.EqualTo(1), "the deserialization failure is reported to the onError callback");
+                Assert.That(invalidMessageService.Errors[0], Is.InstanceOf<InvalidMessageException>(), "the deserialization failure is reported as an InvalidMessageException");
+            }
+
+            var invalidMessageException = (InvalidMessageException)invalidMessageService.Errors[0];
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(invalidMessageException.MessageType, Is.EqualTo(typeof(int)));
+                Assert.That(invalidMessageException.InnerException, Is.InstanceOf<JsonException>());
+                Assert.That(invalidMessageException.GetBodyAsString(), Is.EqualTo("\"not a number\""));
+                Assert.That(invalidMessageException.Exchange, Is.EqualTo(InvalidMessageExchangeName));
+                Assert.That(invalidMessageException.ContentType, Is.EqualTo(SupportedSerializationFormat.JsonFormat));
+            }
+
+            await messageClientService.PushAsync(ConfiguredConnectionName, 43, exchangeConfiguration, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            Assert.That(invalidMessageService.ReceivedMessages, Does.Contain(43), "the listener keeps on listening after an invalid message");
+
+            var asyncExchangeConfiguration = new FanoutExchangeConfiguration(InvalidMessageAsyncExchangeName);
+
+            await messageClientService.PushAsync(ConfiguredConnectionName, "not a number", asyncExchangeConfiguration, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            Assert.That(invalidMessageService.AsyncErrors, Has.Exactly(1).InstanceOf<InvalidMessageException>(), "the deserialization failure is also reported on an async listener");
+
+            await messageClientService.PushAsync(ConfiguredConnectionName, 44, asyncExchangeConfiguration, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            Assert.That(invalidMessageService.AsyncReceivedMessages, Does.Contain(44), "the async listener keeps on listening after an invalid message");
+
+            await cancellationTokenSource.CancelAsync();
+            invalidMessageService.Dispose();
         }
 
         [Test]
@@ -237,16 +305,16 @@ namespace Mercurio.Tests
             await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);
             
             var configuration = new FanoutExchangeConfiguration("AutoRecoveryBackgroundTest");
-            autoRecoveryBackground.PushMessage("abc", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(100, cancellationTokenSource.Token);
 
             Assert.That(autoRecoveryBackground.ReceivedMessages, Has.Count.EqualTo(1));
             
-            autoRecoveryBackground.PushMessage("123", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("123", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(100, cancellationTokenSource.Token);
 
-            autoRecoveryBackground.PushMessage("abc", configuration, cancellationToken: cancellationTokenSource.Token);
-            autoRecoveryBackground.PushMessage("abc", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(100, cancellationTokenSource.Token);
 
             Assert.That(autoRecoveryBackground.ReceivedMessages, Has.Count.EqualTo(3));
@@ -262,16 +330,16 @@ namespace Mercurio.Tests
             await Task.Delay(TimeSpan.FromMilliseconds(200), CancellationToken.None);
             
             var configuration = new FanoutExchangeConfiguration("AutoRecoveryBackgroundTestAsync");
-            autoRecoveryBackground.PushMessage("abc", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(100, cancellationTokenSource.Token);
 
             Assert.That(autoRecoveryBackground.ReceivedMessages, Has.Count.EqualTo(1));
             
-            autoRecoveryBackground.PushMessage("123", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("123", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(50, cancellationTokenSource.Token);
 
-            autoRecoveryBackground.PushMessage("abc", configuration, cancellationToken: cancellationTokenSource.Token);
-            autoRecoveryBackground.PushMessage("abc", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
+            await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(50, cancellationTokenSource.Token);
 
             Assert.That(autoRecoveryBackground.ReceivedMessages, Has.Count.EqualTo(3));
@@ -304,6 +372,53 @@ namespace Mercurio.Tests
             }
         }
         
+        private class InvalidMessageBackgroundService : MessagingBackgroundService
+        {
+            /// <summary>
+            /// Stores all received messages
+            /// </summary>
+            public readonly List<int> ReceivedMessages = [];
+
+            /// <summary>
+            /// Stores all <see cref="Exception" />s that have been notified through the onError callback
+            /// </summary>
+            public readonly List<Exception> Errors = [];
+
+            public readonly List<int> AsyncReceivedMessages = [];
+
+            public readonly List<Exception> AsyncErrors = [];
+
+            /// <summary>
+            /// Initializes a new instance of the <see cref="MessagingBackgroundService" />
+            /// </summary>
+            /// <param name="serviceProvider">
+            /// The injected <see cref="IServiceProvider" /> that allow to resolve
+            /// <see cref="IMessageClientService" /> instance, even if not registered as scope
+            /// </param>
+            /// <param name="logger">The injected <see cref="ILogger{TCategory}" /> to allow logging</param>
+            /// <param name="configuration">The injected <see cref="IConfiguration" /> to provides configuration information for service initialization</param>
+            public InvalidMessageBackgroundService(IServiceProvider serviceProvider, ILogger<InvalidMessageBackgroundService> logger, IConfiguration configuration) : base(serviceProvider, logger, configuration)
+            {
+            }
+
+            /// <summary>
+            /// Initializes this service (e.g. to set the <see cref="MessagingBackgroundService.ConnectionName" /> and register subscriptions
+            /// collection
+            /// </summary>
+            /// <returns>An awaitable <see cref="Task" /></returns>
+            protected override async Task InitializeAsync()
+            {
+                this.ConnectionName = ConfiguredConnectionName;
+                await this.RegisterListener(() => this.MessageClientService.ListenAsync<int>(this.ConnectionName, new FanoutExchangeConfiguration(InvalidMessageExchangeName)), this.ReceivedMessages.Add, onError: this.Errors.Add);
+
+                await this.RegisterAsyncListener(() => this.MessageClientService.ListenAsync<int>(this.ConnectionName, new FanoutExchangeConfiguration(InvalidMessageAsyncExchangeName)), x =>
+                {
+                    this.AsyncReceivedMessages.Add(x);
+                    return Task.CompletedTask;
+                }, onError: this.AsyncErrors.Add);
+            }
+        }
+
         public class AutoRecoveryTestMessagingBackgroundService: MessagingBackgroundService
         {
             /// <summary>
