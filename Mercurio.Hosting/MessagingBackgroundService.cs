@@ -23,8 +23,6 @@ namespace Mercurio.Hosting
     using System.Collections.Concurrent;
     using System.Diagnostics;
 
-    using ErrorOr;
-
     using Mercurio.Extensions;
     using Mercurio.Messaging;
     using Mercurio.Model;
@@ -221,23 +219,22 @@ namespace Mercurio.Hosting
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged the message, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
         /// </returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> or <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
         /// This bypasses the internal background queue, so that the caller can await the acknowledgment. Invalid arguments still
-        /// throw, only the operational failures are reported as an <see cref="Error" />, see <see cref="MessagingErrors" /> for the
-        /// reported ones. The acknowledgment only asserts that the server took responsibility for the message, not that any consumer
-        /// received it.
+        /// throw, any operational failure is logged and returns false. The acknowledgment only asserts that the server took
+        /// responsibility for the message, not that any consumer received it.
         /// </remarks>
-        public async Task<ErrorOr<Success>> PushMessageWithConfirmationAsync<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public async Task<bool> PushMessageWithConfirmationAsync<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             var activityName = $"Background Push with confirmation {typeof(TMessage).Name} [{exchangeConfiguration}]";
 
-            if (!this.TryGetRegisteredActivitySource(out var activitySource, out var error))
+            if (!this.TryGetRegisteredActivitySource(out var activitySource))
             {
-                return error;
+                return false;
             }
 
             using var activity = activitySource?.StartActivity(activityName, ActivityKind.Producer, Activity.Current?.Context ?? default);
@@ -255,25 +252,23 @@ namespace Mercurio.Hosting
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged all the messages, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
         /// </returns>
         /// <exception cref="ArgumentException">When the provided <paramref name="messages" /> collection is null</exception>
         /// <exception cref="ArgumentNullException">When the provided <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
         /// This bypasses the internal background queue, so that the caller can await the acknowledgment. The messages are published
         /// one by one and the process stops at the first message that is not acknowledged. Since there is no transaction involved,
-        /// the messages that have been acknowledged before the failure are already held by the server, the reported
-        /// <see cref="Error.Metadata" /> provides how many of them under the
-        /// <see cref="MessagingErrors.PublishedCountMetadataKey" /> key.
+        /// the messages that have been acknowledged before the failure are already held by the server.
         /// </remarks>
-        public async Task<ErrorOr<Success>> PushMessagesWithConfirmationAsync<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public async Task<bool> PushMessagesWithConfirmationAsync<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             var activityName = $"Background Push with confirmation Multiple {typeof(TMessage).Name} [{exchangeConfiguration}]";
 
-            if (!this.TryGetRegisteredActivitySource(out var activitySource, out var error))
+            if (!this.TryGetRegisteredActivitySource(out var activitySource))
             {
-                return error;
+                return false;
             }
 
             using var activity = activitySource?.StartActivity(activityName, ActivityKind.Producer, Activity.Current?.Context ?? default);
@@ -284,26 +279,27 @@ namespace Mercurio.Hosting
         /// Tries to resolve the <see cref="ActivitySource" /> that is registered for the current <see cref="ConnectionName" />
         /// </summary>
         /// <param name="activitySource">The resolved <see cref="ActivitySource" />, if any</param>
-        /// <param name="error">The <see cref="Error" /> that reports that the <see cref="ConnectionName" /> is not registered</param>
         /// <returns>The assert that the <see cref="ActivitySource" /> could be resolved</returns>
         /// <remarks>
         /// The <see cref="IRabbitMqConnectionProvider.GetRegisteredActivitySource" /> throws when the <see cref="ConnectionName" /> is
-        /// not registered, which happens when the initialization did not set it. Since the confirmation based push reports operational
-        /// failures as an <see cref="Error" />, that exception is converted here.
+        /// not registered, which happens when the initialization did not set it. Since the confirmation based push logs operational
+        /// failures and returns false, that exception is converted here.
         /// </remarks>
-        private bool TryGetRegisteredActivitySource(out ActivitySource activitySource, out Error error)
+        private bool TryGetRegisteredActivitySource(out ActivitySource activitySource)
         {
             try
             {
                 activitySource = this.connectionProvider.GetRegisteredActivitySource(this.ConnectionName);
-                error = default;
                 return true;
             }
             catch (ArgumentException exception)
             {
-                this.Logger.LogWarning(exception, "No connection has been registered under the name {ConnectionName}", this.ConnectionName);
+                if (this.Logger.IsEnabled(LogLevel.Warning))
+                {
+                    this.Logger.LogWarning(exception, "No connection has been registered under the name {ConnectionName}", this.ConnectionName);
+                }
+
                 activitySource = null;
-                error = MessagingErrors.ConnectionNotRegistered(this.ConnectionName, exception);
                 return false;
             }
         }

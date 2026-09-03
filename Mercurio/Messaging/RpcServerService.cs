@@ -125,7 +125,10 @@ namespace Mercurio.Messaging
             }
             catch (Exception exception)
             {
-                this.Logger.LogError(exception, "Error during the RPC server process: {ExceptionMessage}", exception.Message);
+                if (this.Logger.IsEnabled(LogLevel.Error))
+                {
+                    this.Logger.LogError(exception, "Error during the RPC server process: {ExceptionMessage}", exception.Message);
+                }
             }
 
             return Disposable.Create(() =>

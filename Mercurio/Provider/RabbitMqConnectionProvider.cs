@@ -374,7 +374,13 @@ namespace Mercurio.Provider
             var result = await Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(this.retryPolicyConfiguration.MaxConnectionRetryAttempts, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                    (exception, delay, attemptNumber, _) => this.logger.LogWarning(exception, "ChannelLease creation attempt {Attempt} failed. Retrying in {Delay}", attemptNumber, delay))
+                    (exception, delay, attemptNumber, _) =>
+                    {
+                        if (this.logger.IsEnabled(LogLevel.Warning))
+                        {
+                            this.logger.LogWarning(exception, "ChannelLease creation attempt {Attempt} failed. Retrying in {Delay}", attemptNumber, delay);
+                        }
+                    })
                 .ExecuteAndCaptureAsync(() => this.CreateChannelAsync(connectionName, publisherConfirmationsEnabled, cancellationToken));
 
             if (result.Outcome != OutcomeType.Successful)

@@ -107,18 +107,15 @@ await messageClientService.PushAsync("RegisteredConnection","A message to be sen
 #### Push Message And Wait For The Server Acknowledgment
 _PushAsync_ is fire and forget : it returns as soon as the message has been handed to the transport, and any failure is only logged.
 When you need to know that the RabbitMQ server took responsibility for the message, use _PushWithConfirmationAsync_. It publishes on a
-channel that has publisher confirmations enabled and reports the outcome as an `ErrorOr<Success>` instead of throwing.
+channel that has publisher confirmations enabled and returns whether the server acknowledged the message.
 
 ```csharp
 var messageClientService = serviceProvider.GetRequiredService<IMessageClientBaseService>();
 var exchangeConfiguration = new DirectExchangeConfiguration("DirectQueue", "AnExchange", "SomeRouting");
-var result = await messageClientService.PushWithConfirmationAsync("RegisteredConnection", "A message to be sent", exchangeConfiguration);
 
-if (result.IsError)
+if (!await messageClientService.PushWithConfirmationAsync("RegisteredConnection", "A message to be sent", exchangeConfiguration))
 {
-    // MessagingErrors exposes every reported code, and the originating exception is available in the metadata
-    Console.WriteLine($"{result.FirstError.Code}: {result.FirstError.Description}");
-    var exception = (Exception)result.FirstError.Metadata[MessagingErrors.ExceptionMetadataKey];
+    // the reason has been logged, including the exception the RabbitMQ client reported
 }
 ```
 
@@ -128,7 +125,7 @@ Two things to keep in mind :
 - An acknowledgment only asserts that the **server** took responsibility for the message, never that a consumer received it. A message
   published to an exchange that routes to no queue is legitimately acknowledged.
 
-Invalid arguments still throw : only the operational failures are reported as an `Error`.
+Invalid arguments still throw : only the operational failures are logged and reported as `false`.
 
 #### Listen After Message
 ```csharp

@@ -22,8 +22,6 @@ namespace Mercurio.Tests.Messaging
 {
     using System.Diagnostics.CodeAnalysis;
 
-    using ErrorOr;
-
     using Mercurio.Messaging;
     using Mercurio.Model;
     using Mercurio.Provider;
@@ -180,8 +178,8 @@ namespace Mercurio.Tests.Messaging
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
-        /// <returns>An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /></returns>
-        public override Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        /// <returns>An awaitable <see cref="Task{TResult}" /> that asserts the acknowledgment of the RabbitMQ server</returns>
+        public override Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
@@ -196,8 +194,8 @@ namespace Mercurio.Tests.Messaging
         /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
-        /// <returns>An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /></returns>
-        public override Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        /// <returns>An awaitable <see cref="Task{TResult}" /> that asserts the acknowledgment of the RabbitMQ server</returns>
+        public override Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

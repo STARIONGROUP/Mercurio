@@ -20,8 +20,6 @@
 
 namespace Mercurio.Hosting
 {
-    using ErrorOr;
-
     using Mercurio.Messaging;
     using Mercurio.Model;
 
@@ -116,17 +114,16 @@ namespace Mercurio.Hosting
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged the message, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
         /// </returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> or <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
         /// This bypasses the internal background queue, so that the caller can await the acknowledgment. Invalid arguments still
-        /// throw, only the operational failures are reported as an <see cref="Error" />, see <see cref="MessagingErrors" /> for the
-        /// reported ones. The acknowledgment only asserts that the server took responsibility for the message, not that any consumer
-        /// received it.
+        /// throw, any operational failure is logged and returns false. The acknowledgment only asserts that the server took
+        /// responsibility for the message, not that any consumer received it.
         /// </remarks>
-        Task<ErrorOr<Success>> PushMessageWithConfirmationAsync<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+        Task<bool> PushMessageWithConfirmationAsync<TMessage>(TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Asynchronously pushes the specified <paramref name="messages" /> to the specified queue via the
@@ -139,18 +136,16 @@ namespace Mercurio.Hosting
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged all the messages, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
         /// </returns>
         /// <exception cref="ArgumentException">When the provided <paramref name="messages" /> collection is null</exception>
         /// <exception cref="ArgumentNullException">When the provided <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
         /// This bypasses the internal background queue, so that the caller can await the acknowledgment. The messages are published
         /// one by one and the process stops at the first message that is not acknowledged. Since there is no transaction involved,
-        /// the messages that have been acknowledged before the failure are already held by the server, the reported
-        /// <see cref="Error.Metadata" /> provides how many of them under the
-        /// <see cref="MessagingErrors.PublishedCountMetadataKey" /> key.
+        /// the messages that have been acknowledged before the failure are already held by the server.
         /// </remarks>
-        Task<ErrorOr<Success>> PushMessagesWithConfirmationAsync<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+        Task<bool> PushMessagesWithConfirmationAsync<TMessage>(IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
     }
 }

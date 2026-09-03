@@ -170,7 +170,7 @@ namespace Mercurio.Tests
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(acknowledged.IsError, Is.False, "the RabbitMQ server should have acknowledged the message");
+                Assert.That(acknowledged, Is.True, "the RabbitMQ server should have acknowledged the message");
                 Assert.That(this.backgroundService.ReceivedMessages, Does.Contain("ABC"));
             }
 
@@ -178,13 +178,9 @@ namespace Mercurio.Tests
             var notRegistered = await faultyService.PushMessageWithConfirmationAsync("XYZ", exchange, cancellationToken: cancellationTokenSource.Token);
             faultyService.Dispose();
 
-            using (Assert.EnterMultipleScope())
-            {
-                Assert.That(notRegistered.IsError, Is.True, "a service that has not been initialized has no registered connection");
-                Assert.That(notRegistered.FirstError.Code, Is.EqualTo(MessagingErrors.ConnectionNotRegisteredCode), "the missing registration is reported instead of being thrown");
-            }
+            Assert.That(notRegistered, Is.False, "a service that has not been initialized has no registered connection, which is reported instead of being thrown");
 
-            Assert.That(() => this.backgroundService.PushMessageWithConfirmationAsync((string)null, exchange, cancellationToken: cancellationTokenSource.Token), Throws.ArgumentNullException, "an invalid argument remains an exception");
+            await Assert.ThatAsync(() => this.backgroundService.PushMessageWithConfirmationAsync((string)null!, exchange, cancellationToken: cancellationTokenSource.Token), Throws.ArgumentNullException, "an invalid argument remains an exception");
 
             await cancellationTokenSource.CancelAsync();
         }
@@ -206,7 +202,7 @@ namespace Mercurio.Tests
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(acknowledged.IsError, Is.False, "the RabbitMQ server should have acknowledged every message");
+                Assert.That(acknowledged, Is.True, "the RabbitMQ server should have acknowledged every message");
                 Assert.That(this.backgroundService.ReceivedMessages, Is.EquivalentTo(messages));
             }
 
@@ -214,13 +210,9 @@ namespace Mercurio.Tests
             var notRegistered = await faultyService.PushMessagesWithConfirmationAsync(messages, exchange, cancellationToken: cancellationTokenSource.Token);
             faultyService.Dispose();
 
-            using (Assert.EnterMultipleScope())
-            {
-                Assert.That(notRegistered.IsError, Is.True, "a service that has not been initialized has no registered connection");
-                Assert.That(notRegistered.FirstError.Code, Is.EqualTo(MessagingErrors.ConnectionNotRegisteredCode), "the missing registration is reported instead of being thrown");
-            }
+            Assert.That(notRegistered, Is.False, "a service that has not been initialized has no registered connection, which is reported instead of being thrown");
 
-            Assert.That(() => this.backgroundService.PushMessagesWithConfirmationAsync((IEnumerable<string>)null, exchange, cancellationToken: cancellationTokenSource.Token), Throws.ArgumentException, "an invalid argument remains an exception");
+            await Assert.ThatAsync(() => this.backgroundService.PushMessagesWithConfirmationAsync((IEnumerable<string>)null!, exchange, cancellationToken: cancellationTokenSource.Token), Throws.ArgumentException, "an invalid argument remains an exception");
 
             await cancellationTokenSource.CancelAsync();
         }

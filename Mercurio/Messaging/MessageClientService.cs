@@ -27,8 +27,6 @@ namespace Mercurio.Messaging
 
     using CommunityToolkit.HighPerformance;
 
-    using ErrorOr;
-
     using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
@@ -175,18 +173,18 @@ namespace Mercurio.Messaging
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged the message, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
         /// </returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> or <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
         /// Contrary to <see cref="PushAsync{TMessage}(string,TMessage,IExchangeConfiguration,Action{BasicProperties},CancellationToken)" />,
-        /// any publication failure is reported to the caller instead of being logged only. Invalid arguments still throw, only the
-        /// operational failures are reported as an <see cref="Error" />, see <see cref="MessagingErrors" /> for the reported ones.
-        /// Publisher confirmations throttle the amount of outstanding publications, so this is slower than a regular push. The
-        /// acknowledgment only asserts that the server took responsibility for the message, not that any consumer received it.
+        /// a publication failure is reported to the caller instead of being logged only. Invalid arguments still throw, any
+        /// operational failure is logged and returns false. Publisher confirmations throttle the amount of outstanding publications,
+        /// so this is slower than a regular push. The acknowledgment only asserts that the server took responsibility for the
+        /// message, not that any consumer received it.
         /// </remarks>
-        public override Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public override Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             if (Equals(message, default(TMessage)))
             {
@@ -215,19 +213,17 @@ namespace Mercurio.Messaging
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged all the messages, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
         /// </returns>
         /// <exception cref="ArgumentException">When the provided <paramref name="messages" /> collection is null</exception>
         /// <exception cref="ArgumentNullException">When the provided <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
-        /// Invalid arguments still throw, only the operational failures are reported as an <see cref="Error" />, see
-        /// <see cref="MessagingErrors" /> for the reported ones. The messages are published one by one and the process stops at the
-        /// first message that is not acknowledged. Since there is no transaction involved, the messages that have been acknowledged
-        /// before the failure are already held by the server, the reported <see cref="Error.Metadata" /> provides how many of them
-        /// under the <see cref="MessagingErrors.PublishedCountMetadataKey" /> key.
+        /// Invalid arguments still throw, any operational failure is logged and returns false. The messages are published one by one
+        /// and the process stops at the first message that is not acknowledged. Since there is no transaction involved, the messages
+        /// that have been acknowledged before the failure are already held by the server, the log reports how many of them.
         /// </remarks>
-        public override Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        public override Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
         {
             if (messages == null)
             {
@@ -299,7 +295,10 @@ namespace Mercurio.Messaging
             }
             catch (Exception exception)
             {
-                this.Logger.LogError(exception, "Error while adding a listener to the {QueueName}", exchangeConfiguration.QueueName);
+                if (this.Logger.IsEnabled(LogLevel.Error))
+                {
+                    this.Logger.LogError(exception, "Error while adding a listener to the {QueueName}", exchangeConfiguration.QueueName);
+                }
             }
 
             return Disposable.Create(() =>
@@ -397,7 +396,10 @@ namespace Mercurio.Messaging
             }
             catch (Exception exception)
             {
-                this.Logger.LogError(exception, "The message {MessageName} could not be queued to {MessageQueue} reason : {Exception}", typeof(TMessage).Name, exchangeConfiguration.QueueName, exception.Message);
+                if (this.Logger.IsEnabled(LogLevel.Error))
+                {
+                    this.Logger.LogError(exception, "The message {MessageName} could not be queued to {MessageQueue} reason : {Exception}", typeof(TMessage).Name, exchangeConfiguration.QueueName, exception.Message);
+                }
             }
         }
 
@@ -412,14 +414,14 @@ namespace Mercurio.Messaging
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged all the messages, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
         /// </returns>
         /// <remarks>
         /// The process stops at the first message that is not acknowledged, so that a broken connection does not have every remaining
         /// message pay the connection retry backoff
         /// </remarks>
-        private async Task<ErrorOr<Success>> PushMultipleWithConfirmationInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        private async Task<bool> PushMultipleWithConfirmationInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
         {
             var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
 
@@ -433,21 +435,21 @@ namespace Mercurio.Messaging
             for (var messageIndex = 0; messageIndex < messagesList.Count; messageIndex++)
             {
                 var subActivityName = activity == null ? null : $"{activityName} [{messageIndex + 1}/{messagesList.Count}]";
-                var result = await this.TryPublishAsync(connectionName, messagesList[messageIndex], exchangeConfiguration, configureProperties, subActivityName, context, cancellationToken);
+                var isAcknowledged = await this.TryPublishAsync(connectionName, messagesList[messageIndex], exchangeConfiguration, configureProperties, subActivityName, context, cancellationToken);
 
-                if (result.IsError)
+                if (!isAcknowledged)
                 {
-                    return MessagingErrors.BatchFailed(result.FirstError, messageIndex, messageIndex);
+                    return false;
                 }
             }
 
-            return Result.Success;
+            return true;
         }
 
         /// <summary>
         /// Publishes the specified <paramref name="message" /> to the specified queue via the
-        /// <paramref name="exchangeConfiguration" />, waiting for the RabbitMQ server to acknowledge it and reporting any failure as
-        /// an <see cref="Error" /> instead of throwing
+        /// <paramref name="exchangeConfiguration" />, waiting for the RabbitMQ server to acknowledge it and logging any failure
+        /// instead of throwing
         /// </summary>
         /// <typeparam name="TMessage">The type of message</typeparam>
         /// <param name="connectionName">The name of the registered connection to use.</param>
@@ -461,25 +463,33 @@ namespace Mercurio.Messaging
         /// <param name="activityContext">An optional <see cref="ActivityContext" />. If not set, current context will be based on <see cref="Activity.Current" /></param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged the message, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
         /// </returns>
-        private async Task<ErrorOr<Success>> TryPublishAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, CancellationToken cancellationToken)
+        private async Task<bool> TryPublishAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, CancellationToken cancellationToken)
         {
             try
             {
                 await this.PublishInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, activityContext, true, cancellationToken);
-                return Result.Success;
+                return true;
             }
             catch (PublishException publishException)
             {
-                this.Logger.LogWarning(publishException, "The message {MessageName} has not been acknowledged by the RabbitMQ server for {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
-                return MessagingErrors.NotAcknowledged(publishException);
+                if (this.Logger.IsEnabled(LogLevel.Warning))
+                {
+                    this.Logger.LogWarning(publishException, "The message {MessageName} has not been acknowledged by the RabbitMQ server for {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                }
+
+                return false;
             }
             catch (Exception exception)
             {
-                this.Logger.LogWarning(exception, "The message {MessageName} could not be published to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
-                return MessagingErrors.PublishFailed(exception);
+                if (this.Logger.IsEnabled(LogLevel.Warning))
+                {
+                    this.Logger.LogWarning(exception, "The message {MessageName} could not be published to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                }
+
+                return false;
             }
         }
 
@@ -556,7 +566,10 @@ namespace Mercurio.Messaging
                     this.Logger.LogDebug("Message Body {Body}", Encoding.UTF8.GetString(body.ToArray()));
                 }
 
-                this.Logger.LogInformation("Message {MessageName} sent to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                if (this.Logger.IsEnabled(LogLevel.Information))
+                {
+                    this.Logger.LogInformation("Message {MessageName} sent to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                }
                 activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception exception)
@@ -633,7 +646,10 @@ namespace Mercurio.Messaging
                     {
                         var invalidMessageException = new InvalidMessageException(typeof(TMessage), message, deserializationException);
 
-                        this.Logger.LogError(deserializationException, "The message received on {QueueName} could not be deserialized into a {MessageName}", exchangeConfiguration.QueueName, typeof(TMessage).Name);
+                        if (this.Logger.IsEnabled(LogLevel.Error))
+                        {
+                            this.Logger.LogError(deserializationException, "The message received on {QueueName} could not be deserialized into a {MessageName}", exchangeConfiguration.QueueName, typeof(TMessage).Name);
+                        }
                         activity?.SetStatus(ActivityStatusCode.Error, invalidMessageException.Message);
                         observer.OnError(invalidMessageException);
                         return;

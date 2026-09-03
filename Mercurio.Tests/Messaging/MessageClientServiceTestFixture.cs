@@ -20,8 +20,6 @@
 
 namespace Mercurio.Tests.Messaging
 {
-    using ErrorOr;
-
     using Mercurio.Extensions;
     using Mercurio.Messaging;
     using Mercurio.Model;
@@ -147,8 +145,7 @@ namespace Mercurio.Tests.Messaging
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(acknowledged.IsError, Is.False, "the RabbitMQ server should have acknowledged the message");
-                Assert.That(acknowledged.Value, Is.EqualTo(Result.Success));
+                Assert.That(acknowledged, Is.True, "the RabbitMQ server should have acknowledged the message");
             }
 
             var received = await Task.WhenAny(taskCompletion.Task, Task.Delay(2000));
@@ -158,15 +155,13 @@ namespace Mercurio.Tests.Messaging
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(unregistered.IsError, Is.True, "an unregistered connection should be reported instead of being swallowed");
-                Assert.That(unregistered.FirstError.Code, Is.EqualTo(MessagingErrors.PublishFailedCode));
-                Assert.That(unregistered.FirstError.Metadata[MessagingErrors.ExceptionMetadataKey], Is.InstanceOf<Exception>());
+                Assert.That(unregistered, Is.False, "an unregistered connection should be reported instead of being swallowed");
             }
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, (string)null, exchangeConfiguration), Throws.ArgumentNullException, "an invalid argument remains an exception");
-                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, FirstSentMessage, null), Throws.ArgumentNullException);
+                await Assert.ThatAsync(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, (string)null, exchangeConfiguration), Throws.ArgumentNullException, "an invalid argument remains an exception");
+                await Assert.ThatAsync(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, FirstSentMessage, null), Throws.ArgumentNullException);
             }
 
             var rejectingConfiguration = await this.DeclareRejectPublishExchangeAsync("ConfirmationRejectExchange", "ConfirmationRejectQueue");
@@ -176,9 +171,7 @@ namespace Mercurio.Tests.Messaging
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(nacked.IsError, Is.True, "a message the server refuses should be reported");
-                Assert.That(nacked.FirstError.Code, Is.EqualTo(MessagingErrors.NotAcknowledgedCode));
-                Assert.That(nacked.FirstError.Metadata[MessagingErrors.ExceptionMetadataKey], Is.InstanceOf<PublishException>());
+                Assert.That(nacked, Is.False, "a message the server refuses should be reported");
             }
         }
 
@@ -192,28 +185,22 @@ namespace Mercurio.Tests.Messaging
             IEnumerable<string> messages = ["ABC", "DEF", "GHI"];
 
             var acknowledged = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, exchangeConfiguration);
-            Assert.That(acknowledged.IsError, Is.False, "the RabbitMQ server should have acknowledged every message");
+            Assert.That(acknowledged, Is.True, "the RabbitMQ server should have acknowledged every message");
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, (IEnumerable<string>)null, exchangeConfiguration), Throws.ArgumentException, "an invalid argument remains an exception");
-                Assert.That(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, null), Throws.ArgumentNullException);
+                await Assert.ThatAsync(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, (IEnumerable<string>)null, exchangeConfiguration), Throws.ArgumentException, "an invalid argument remains an exception");
+                await Assert.ThatAsync(() => this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, null), Throws.ArgumentNullException);
             }
 
             var rejectingConfiguration = await this.DeclareRejectPublishExchangeAsync("ConfirmationCollectionRejectExchange", "ConfirmationCollectionRejectQueue");
 
             var fillingTheQueue = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, "fills the queue", rejectingConfiguration);
-            Assert.That(fillingTheQueue.IsError, Is.False, "the rejecting queue accepts a single message before reaching its capacity");
+            Assert.That(fillingTheQueue, Is.True, "the rejecting queue accepts a single message before reaching its capacity");
 
             var refused = await this.firstService.PushWithConfirmationAsync(FirstConnectionName, messages, rejectingConfiguration);
 
-            using (Assert.EnterMultipleScope())
-            {
-                Assert.That(refused.IsError, Is.True, "the batch should stop at the first refused message");
-                Assert.That(refused.FirstError.Code, Is.EqualTo(MessagingErrors.NotAcknowledgedCode));
-                Assert.That(refused.FirstError.Metadata[MessagingErrors.PublishedCountMetadataKey], Is.Zero, "the queue is already full, so nothing of the batch got through");
-                Assert.That(refused.FirstError.Metadata[MessagingErrors.FailedIndexMetadataKey], Is.Zero);
-            }
+            Assert.That(refused, Is.False, "the queue is already full, so the batch stops at its very first message");
         }
 
         /// <summary>
@@ -472,12 +459,13 @@ namespace Mercurio.Tests.Messaging
            }
            
            Activity.CurrentChanged -= ActivityOnCurrentChanged;
-            
+           return;
+
            void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
            {
                if (e.Current is { Source.Name: FirstConnectionName or SecondConnectionName })
                {
-                   activities.Add(e.Current!);
+                   activities.Add(e.Current);
                }
            }
        }
@@ -518,12 +506,13 @@ namespace Mercurio.Tests.Messaging
            }
            
            Activity.CurrentChanged -= ActivityOnCurrentChanged;
-            
+           return;
+
            void ActivityOnCurrentChanged(object sender, ActivityChangedEventArgs e)
            {
                if (e.Current is { Source.Name: FirstConnectionName or SecondConnectionName })
                {
-                   activities.Add(e.Current!);
+                   activities.Add(e.Current);
                }
            }
        }

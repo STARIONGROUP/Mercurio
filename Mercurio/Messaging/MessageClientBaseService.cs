@@ -22,8 +22,6 @@ namespace Mercurio.Messaging
 {
     using System.Diagnostics;
 
-    using ErrorOr;
-
     using Mercurio.Extensions;
     using Mercurio.Model;
     using Mercurio.Provider;
@@ -139,18 +137,18 @@ namespace Mercurio.Messaging
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged the message, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
         /// </returns>
         /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> or <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
         /// Contrary to <see cref="PushAsync{TMessage}(string,TMessage,IExchangeConfiguration,Action{BasicProperties},CancellationToken)" />,
-        /// any publication failure is reported to the caller instead of being logged only. Invalid arguments still throw, only the
-        /// operational failures are reported as an <see cref="Error" />, see <see cref="MessagingErrors" /> for the reported ones.
-        /// Publisher confirmations throttle the amount of outstanding publications, so this is slower than a regular push. The
-        /// acknowledgment only asserts that the server took responsibility for the message, not that any consumer received it.
+        /// a publication failure is reported to the caller instead of being logged only. Invalid arguments still throw, any
+        /// operational failure is logged and returns false. Publisher confirmations throttle the amount of outstanding publications,
+        /// so this is slower than a regular push. The acknowledgment only asserts that the server took responsibility for the
+        /// message, not that any consumer received it.
         /// </remarks>
-        public abstract Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+        public abstract Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Pushes the specified <paramref name="messages" /> to the specified queue via the <paramref name="exchangeConfiguration" />
@@ -163,19 +161,17 @@ namespace Mercurio.Messaging
         /// <param name="configureProperties">Possible action to configure additional properties</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>
-        /// An awaitable <see cref="Task{TResult}" /> of <see cref="ErrorOr{TValue}" /> that provides <see cref="Success" /> once the
-        /// RabbitMQ server has acknowledged all the messages, or the <see cref="Error" /> that describes the failure
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
         /// </returns>
         /// <exception cref="ArgumentException">When the provided <paramref name="messages" /> collection is null</exception>
         /// <exception cref="ArgumentNullException">When the provided <paramref name="exchangeConfiguration" /> is null</exception>
         /// <remarks>
-        /// Invalid arguments still throw, only the operational failures are reported as an <see cref="Error" />, see
-        /// <see cref="MessagingErrors" /> for the reported ones. The messages are published one by one and the process stops at the
-        /// first message that is not acknowledged. Since there is no transaction involved, the messages that have been acknowledged
-        /// before the failure are already held by the server, the reported <see cref="Error.Metadata" /> provides how many of them
-        /// under the <see cref="MessagingErrors.PublishedCountMetadataKey" /> key.
+        /// Invalid arguments still throw, any operational failure is logged and returns false. The messages are published one by one
+        /// and the process stops at the first message that is not acknowledged. Since there is no transaction involved, the messages
+        /// that have been acknowledged before the failure are already held by the server, the log reports how many of them.
         /// </remarks>
-        public abstract Task<ErrorOr<Success>> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+        public abstract Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -319,7 +315,10 @@ namespace Mercurio.Messaging
                 return null;
             }
 
-            this.Logger.LogTrace("{ActivityName} started!", activityName);
+            if (this.Logger.IsEnabled(LogLevel.Trace))
+            {
+                this.Logger.LogTrace("{ActivityName} started!", activityName);
+            }
 
             return activity;
         }
