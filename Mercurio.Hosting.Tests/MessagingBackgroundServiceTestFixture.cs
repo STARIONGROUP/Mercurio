@@ -115,7 +115,10 @@ namespace Mercurio.Tests
         {
             using var cancellationTokenSource = new CancellationTokenSource();
             _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
-            await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);
+
+            // a fanout message published before the listener has bound its queue is silently discarded, so the subscriptions have to be
+            // established before pushing anything
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
 
             string[] messages = ["ABC", "DEF", "GHI"];
 
@@ -151,6 +154,67 @@ namespace Mercurio.Tests
             await cancellationTokenSource.CancelAsync();
 
             Assert.That(this.backgroundService.ReceivedMessages, Does.Contain("ABC"));
+        }
+
+        [Test]
+        public async Task VerifyPushMessageWithConfirmationAsync()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            var exchange = new FanoutExchangeConfiguration("BackgroundTestPushAsync");
+
+            var acknowledged = await this.backgroundService.PushMessageWithConfirmationAsync("ABC", exchange, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(acknowledged, Is.True, "the RabbitMQ server should have acknowledged the message");
+                Assert.That(this.backgroundService.ReceivedMessages, Does.Contain("ABC"));
+            }
+
+            var faultyService = new TestMessagingBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<TestMessagingBackgroundService>>(), this.configurationMock.Object);
+            var notRegistered = await faultyService.PushMessageWithConfirmationAsync("XYZ", exchange, cancellationToken: cancellationTokenSource.Token);
+            faultyService.Dispose();
+
+            Assert.That(notRegistered, Is.False, "a service that has not been initialized has no registered connection, which is reported instead of being thrown");
+
+            await Assert.ThatAsync(() => this.backgroundService.PushMessageWithConfirmationAsync((string)null!, exchange, cancellationToken: cancellationTokenSource.Token), Throws.ArgumentNullException, "an invalid argument remains an exception");
+
+            await cancellationTokenSource.CancelAsync();
+        }
+
+        [Test]
+        public async Task VerifyPushMessagesWithConfirmationAsync()
+        {
+            using var cancellationTokenSource = new CancellationTokenSource();
+            _ = this.backgroundService.StartAsync(cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
+            var exchange = new FanoutExchangeConfiguration("BackgroundTestPushAsync");
+
+            // the cast is required: an array also binds to the single message overload, with TMessage being the array itself
+            IEnumerable<string> messages = ["ABC", "DEF", "GHI"];
+
+            var acknowledged = await this.backgroundService.PushMessagesWithConfirmationAsync(messages, exchange, cancellationToken: cancellationTokenSource.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(800), CancellationToken.None);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(acknowledged, Is.True, "the RabbitMQ server should have acknowledged every message");
+                Assert.That(this.backgroundService.ReceivedMessages, Is.EquivalentTo(messages));
+            }
+
+            var faultyService = new TestMessagingBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<TestMessagingBackgroundService>>(), this.configurationMock.Object);
+            var notRegistered = await faultyService.PushMessagesWithConfirmationAsync(messages, exchange, cancellationToken: cancellationTokenSource.Token);
+            faultyService.Dispose();
+
+            Assert.That(notRegistered, Is.False, "a service that has not been initialized has no registered connection, which is reported instead of being thrown");
+
+            await Assert.ThatAsync(() => this.backgroundService.PushMessagesWithConfirmationAsync((IEnumerable<string>)null!, exchange, cancellationToken: cancellationTokenSource.Token), Throws.ArgumentException, "an invalid argument remains an exception");
+
+            await cancellationTokenSource.CancelAsync();
         }
 
         [Test]
@@ -302,8 +366,11 @@ namespace Mercurio.Tests
             using var cancellationTokenSource = new CancellationTokenSource();
             var autoRecoveryBackground = new AutoRecoveryTestMessagingBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<AutoRecoveryTestMessagingBackgroundService>>(), this.configurationMock.Object);
             _ = autoRecoveryBackground.StartAsync(cancellationTokenSource.Token);
-            await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None);
-            
+
+            // a fanout message published before the listener has bound its queue is silently discarded, so the subscriptions have to be
+            // established before pushing anything
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
             var configuration = new FanoutExchangeConfiguration("AutoRecoveryBackgroundTest");
             await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(100, cancellationTokenSource.Token);
@@ -327,8 +394,11 @@ namespace Mercurio.Tests
             using var cancellationTokenSource = new CancellationTokenSource();
             var autoRecoveryBackground = new AutoRecoveryTestMessagingBackgroundService(this.serviceProvider, this.serviceProvider.GetRequiredService<ILogger<AutoRecoveryTestMessagingBackgroundService>>(), this.configurationMock.Object);
             _ = autoRecoveryBackground.StartAsync(cancellationTokenSource.Token);
-            await Task.Delay(TimeSpan.FromMilliseconds(200), CancellationToken.None);
-            
+
+            // a fanout message published before the listener has bound its queue is silently discarded, so the subscriptions have to be
+            // established before pushing anything
+            await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+
             var configuration = new FanoutExchangeConfiguration("AutoRecoveryBackgroundTestAsync");
             await autoRecoveryBackground.PushMessageAsync("abc", configuration, cancellationToken: cancellationTokenSource.Token);
             await Task.Delay(100, cancellationTokenSource.Token);

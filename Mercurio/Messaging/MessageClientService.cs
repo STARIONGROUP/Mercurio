@@ -36,6 +36,7 @@ namespace Mercurio.Messaging
 
     using RabbitMQ.Client;
     using RabbitMQ.Client.Events;
+    using RabbitMQ.Client.Exceptions;
 
     /// <summary>
     /// The <see cref="MessageClientService" /> is the concrete implementation of the <see cref="MessageClientService" />
@@ -78,7 +79,7 @@ namespace Mercurio.Messaging
         {
             if (exchangeConfiguration == null)
             {
-                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+                throw new ArgumentNullException(nameof(exchangeConfiguration));
             }
 
             return this.ListenInternalAsync<TMessage>(connectionName, exchangeConfiguration, cancellationToken);
@@ -96,7 +97,7 @@ namespace Mercurio.Messaging
         {
             if (exchangeConfiguration == null)
             {
-                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+                throw new ArgumentNullException(nameof(exchangeConfiguration));
             }
 
             return this.AddListenerInternalAsync(connectionName, exchangeConfiguration, onReceiveAsync, cancellationToken);
@@ -162,6 +163,82 @@ namespace Mercurio.Messaging
         }
 
         /// <summary>
+        /// Pushes the specified <paramref name="message" /> to the specified queue via the <paramref name="exchangeConfiguration" />
+        /// and waits for the RabbitMQ server to acknowledge that it has taken responsibility for the message
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
+        /// </returns>
+        /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> or <paramref name="exchangeConfiguration" /> is null</exception>
+        /// <remarks>
+        /// Contrary to <see cref="PushAsync{TMessage}(string,TMessage,IExchangeConfiguration,Action{BasicProperties},CancellationToken)" />,
+        /// a publication failure is reported to the caller instead of being logged only. Invalid arguments still throw, any
+        /// operational failure is logged and returns false. Publisher confirmations throttle the amount of outstanding publications,
+        /// so this is slower than a regular push. The acknowledgment only asserts that the server took responsibility for the
+        /// message, not that any consumer received it.
+        /// </remarks>
+        public override Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            if (Equals(message, default(TMessage)))
+            {
+                throw new ArgumentNullException(nameof(message), "The message to be sent can not be null");
+            }
+
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+
+            var context = Activity.Current == null ? default : Activity.Current.Context;
+            var activityName = $"Push with confirmation {typeof(TMessage).Name} [{exchangeConfiguration}]";
+
+            return this.TryPublishAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, context, cancellationToken);
+        }
+
+        /// <summary>
+        /// Pushes the specified <paramref name="messages" /> to the specified queue via the <paramref name="exchangeConfiguration" />
+        /// and waits for the RabbitMQ server to acknowledge that it has taken responsibility for each message
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
+        /// </returns>
+        /// <exception cref="ArgumentException">When the provided <paramref name="messages" /> collection is null</exception>
+        /// <exception cref="ArgumentNullException">When the provided <paramref name="exchangeConfiguration" /> is null</exception>
+        /// <remarks>
+        /// Invalid arguments still throw, any operational failure is logged and returns false. The messages are published one by one
+        /// and the process stops at the first message that is not acknowledged. Since there is no transaction involved, the messages
+        /// that have been acknowledged before the failure are already held by the server, the log reports how many of them.
+        /// </remarks>
+        public override Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default)
+        {
+            if (messages == null)
+            {
+                throw new ArgumentException("The messages collection cannot be null", nameof(messages));
+            }
+
+            if (exchangeConfiguration == null)
+            {
+                throw new ArgumentNullException(nameof(exchangeConfiguration), "The exchange configuration cannot be null");
+            }
+
+            return this.PushMultipleWithConfirmationInternalAsync(connectionName, messages, exchangeConfiguration, configureProperties, cancellationToken);
+        }
+
+        /// <summary>
         /// Listens for messages of type <typeparamref name="TMessage" /> on the specified queue.
         /// </summary>
         /// <typeparam name="TMessage">The type of messages to listen for.</typeparam>
@@ -218,7 +295,10 @@ namespace Mercurio.Messaging
             }
             catch (Exception exception)
             {
-                this.Logger.LogError(exception, "Error while adding a listener to the {QueueName}", exchangeConfiguration.QueueName);
+                if (this.Logger.IsEnabled(LogLevel.Error))
+                {
+                    this.Logger.LogError(exception, "Error while adding a listener to the {QueueName}", exchangeConfiguration.QueueName);
+                }
             }
 
             return Disposable.Create(() =>
@@ -310,11 +390,142 @@ namespace Mercurio.Messaging
         /// </remarks>
         private async Task PushInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, CancellationToken cancellationToken)
         {
+            try
+            {
+                await this.PublishInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, activityContext, false, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                if (this.Logger.IsEnabled(LogLevel.Error))
+                {
+                    this.Logger.LogError(exception, "The message {MessageName} could not be queued to {MessageQueue} reason : {Exception}", typeof(TMessage).Name, exchangeConfiguration.QueueName, exception.Message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Publishes the specified <paramref name="messages" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, waiting for the RabbitMQ server to acknowledge each of them
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
+        /// </returns>
+        /// <remarks>
+        /// The process stops at the first message that is not acknowledged, so that a broken connection does not have every remaining
+        /// message pay the connection retry backoff
+        /// </remarks>
+        private async Task<bool> PushMultipleWithConfirmationInternalAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, CancellationToken cancellationToken)
+        {
+            var activitySource = this.ConnectionProvider.GetRegisteredActivitySource(connectionName);
+
+            var context = Activity.Current == null ? default : Activity.Current.Context;
+            var activityName = $"Push with confirmation {typeof(TMessage).Name} collection [{exchangeConfiguration}]";
+
+            using var activity = this.StartActivity(activitySource, context, activityName, ActivityKind.Producer);
+
+            var messagesList = messages.ToList();
+
+            for (var messageIndex = 0; messageIndex < messagesList.Count; messageIndex++)
+            {
+                var subActivityName = activity == null ? null : $"{activityName} [{messageIndex + 1}/{messagesList.Count}]";
+                var isAcknowledged = await this.TryPublishAsync(connectionName, messagesList[messageIndex], exchangeConfiguration, configureProperties, subActivityName, context, cancellationToken);
+
+                if (!isAcknowledged)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Publishes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, waiting for the RabbitMQ server to acknowledge it and logging any failure
+        /// instead of throwing
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
+        /// <param name="activityContext">An optional <see cref="ActivityContext" />. If not set, current context will be based on <see cref="Activity.Current" /></param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
+        /// </returns>
+        private async Task<bool> TryPublishAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await this.PublishInternalAsync(connectionName, message, exchangeConfiguration, configureProperties, activityName, activityContext, true, cancellationToken);
+                return true;
+            }
+            catch (PublishException publishException)
+            {
+                if (this.Logger.IsEnabled(LogLevel.Warning))
+                {
+                    this.Logger.LogWarning(publishException, "The message {MessageName} has not been acknowledged by the RabbitMQ server for {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                }
+
+                return false;
+            }
+            catch (Exception exception)
+            {
+                if (this.Logger.IsEnabled(LogLevel.Warning))
+                {
+                    this.Logger.LogWarning(exception, "The message {MessageName} could not be published to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Publishes the specified <paramref name="message" /> to the specified queue via the
+        /// <paramref name="exchangeConfiguration" />, reporting any failure to the caller
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="activityName">
+        /// Defines the name of an <see cref="Activity" /> that should be initialized before sending the message, for traceability.
+        /// <see cref="Activity" /> information will be sent in the message header.
+        /// In case of null or empty, no <see cref="Activity" /> is started
+        /// </param>
+        /// <param name="activityContext">An optional <see cref="ActivityContext" />. If not set, current context will be based on <see cref="Activity.Current" /></param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the message has to be published on a channel that supports publisher confirmations, making the
+        /// <see cref="IChannel.BasicPublishAsync{TProperties}(string,string,bool,TProperties,ReadOnlyMemory{byte},CancellationToken)" />
+        /// await the acknowledgment of the RabbitMQ server
+        /// </param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>An awaitable <see cref="Task" /></returns>
+        /// <remarks>
+        /// By default, the <see cref="BasicProperties" /> is configured to use the <see cref="DeliveryModes.Persistent" /> mode and sets the
+        /// <see cref="BasicProperties.ContentType" /> as 'application/json"
+        /// </remarks>
+        private async Task PublishInternalAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties, string activityName, ActivityContext activityContext, bool publisherConfirmationsEnabled, CancellationToken cancellationToken)
+        {
             Activity activity = null;
 
             try
             {
-                await using var channelLease = await this.LeaseChannelAsync(connectionName, cancellationToken);
+                await using var channelLease = await this.LeaseChannelAsync(connectionName, publisherConfirmationsEnabled, cancellationToken);
                 await exchangeConfiguration.EnsureQueueAndExchangeAreDeclaredAsync(channelLease.Channel, true);
 
                 var properties = new BasicProperties
@@ -350,14 +561,21 @@ namespace Mercurio.Messaging
                     routingKey, false, properties,
                     body, cancellationToken);
 
-                this.Logger.LogDebug("Message Body {Body}", Encoding.UTF8.GetString(body.ToArray()));
-                this.Logger.LogInformation("Message {MessageName} sent to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                if (this.Logger.IsEnabled(LogLevel.Debug))
+                {
+                    this.Logger.LogDebug("Message Body {Body}", Encoding.UTF8.GetString(body.ToArray()));
+                }
+
+                if (this.Logger.IsEnabled(LogLevel.Information))
+                {
+                    this.Logger.LogInformation("Message {MessageName} sent to {MessageQueue}", typeof(TMessage).Name, exchangeConfiguration.QueueName);
+                }
                 activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception exception)
             {
-                this.Logger.LogError(exception, "The message {MessageName} could not be queued to {MessageQueue} reason : {Exception}", typeof(TMessage).Name, exchangeConfiguration.QueueName, exception.Message);
                 activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                throw;
             }
             finally
             {
@@ -428,7 +646,10 @@ namespace Mercurio.Messaging
                     {
                         var invalidMessageException = new InvalidMessageException(typeof(TMessage), message, deserializationException);
 
-                        this.Logger.LogError(deserializationException, "The message received on {QueueName} could not be deserialized into a {MessageName}", exchangeConfiguration.QueueName, typeof(TMessage).Name);
+                        if (this.Logger.IsEnabled(LogLevel.Error))
+                        {
+                            this.Logger.LogError(deserializationException, "The message received on {QueueName} could not be deserialized into a {MessageName}", exchangeConfiguration.QueueName, typeof(TMessage).Name);
+                        }
                         activity?.SetStatus(ActivityStatusCode.Error, invalidMessageException.Message);
                         observer.OnError(invalidMessageException);
                         return;

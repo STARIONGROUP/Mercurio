@@ -104,6 +104,29 @@ var exchangeConfiguration = new DirectExchangeConfiguration("DirectQueue", "AnEx
 await messageClientService.PushAsync("RegisteredConnection","A message to be sent",exchangeConfiguration);
 ```
 
+#### Push Message And Wait For The Server Acknowledgment
+_PushAsync_ is fire and forget : it returns as soon as the message has been handed to the transport, and any failure is only logged.
+When you need to know that the RabbitMQ server took responsibility for the message, use _PushWithConfirmationAsync_. It publishes on a
+channel that has publisher confirmations enabled and returns whether the server acknowledged the message.
+
+```csharp
+var messageClientService = serviceProvider.GetRequiredService<IMessageClientBaseService>();
+var exchangeConfiguration = new DirectExchangeConfiguration("DirectQueue", "AnExchange", "SomeRouting");
+
+if (!await messageClientService.PushWithConfirmationAsync("RegisteredConnection", "A message to be sent", exchangeConfiguration))
+{
+    // the reason has been logged, including the exception the RabbitMQ client reported
+}
+```
+
+Two things to keep in mind :
+- Publisher confirmations throttle the amount of outstanding publications, so a confirmed push is slower than a regular one. Channels
+  supporting confirmations are pooled separately, since confirmations can only be enabled when the channel is created.
+- An acknowledgment only asserts that the **server** took responsibility for the message, never that a consumer received it. A message
+  published to an exchange that routes to no queue is legitimately acknowledged.
+
+Invalid arguments still throw : only the operational failures are logged and reported as `false`.
+
 #### Listen After Message
 ```csharp
 var messageClientService = serviceProvider.GetRequiredService<IMessageClientBaseService>();

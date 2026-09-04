@@ -86,11 +86,70 @@ namespace Mercurio.Messaging
         Task PushAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Pushes the specified <paramref name="message" /> to the specified queue via the <paramref name="exchangeConfiguration" />
+        /// and waits for the RabbitMQ server to acknowledge that it has taken responsibility for the message
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="message">The <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">A possible <see cref="CancellationToken" /></param>
+        /// <returns>
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged the message, false
+        /// if it has not
+        /// </returns>
+        /// <exception cref="ArgumentNullException">When the provided <typeparamref name="TMessage" /> or <paramref name="exchangeConfiguration" /> is null</exception>
+        /// <remarks>
+        /// Contrary to <see cref="PushAsync{TMessage}(string,TMessage,IExchangeConfiguration,Action{BasicProperties},CancellationToken)" />,
+        /// a publication failure is reported to the caller instead of being logged only. Invalid arguments still throw, any
+        /// operational failure is logged and returns false. Publisher confirmations throttle the amount of outstanding publications,
+        /// so this is slower than a regular push. The acknowledgment only asserts that the server took responsibility for the
+        /// message, not that any consumer received it.
+        /// </remarks>
+        Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, TMessage message, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Pushes the specified <paramref name="messages" /> to the specified queue via the <paramref name="exchangeConfiguration" />
+        /// and waits for the RabbitMQ server to acknowledge that it has taken responsibility for each message
+        /// </summary>
+        /// <typeparam name="TMessage">The type of message</typeparam>
+        /// <param name="connectionName">The name of the registered connection to use.</param>
+        /// <param name="messages">The collection of <typeparamref name="TMessage" /> to push</param>
+        /// <param name="exchangeConfiguration">The <see cref="IExchangeConfiguration" /> that should be used to configure the queue and exchange to use</param>
+        /// <param name="configureProperties">Possible action to configure additional properties</param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>
+        /// An awaitable <see cref="Task{TResult}" /> that provides true once the RabbitMQ server has acknowledged all the messages,
+        /// false as soon as one of them is not acknowledged
+        /// </returns>
+        /// <exception cref="ArgumentException">When the provided <paramref name="messages" /> collection is null</exception>
+        /// <exception cref="ArgumentNullException">When the provided <paramref name="exchangeConfiguration" /> is null</exception>
+        /// <remarks>
+        /// Invalid arguments still throw, any operational failure is logged and returns false. The messages are published one by one
+        /// and the process stops at the first message that is not acknowledged. Since there is no transaction involved, the messages
+        /// that have been acknowledged before the failure are already held by the server, the log reports how many of them.
+        /// </remarks>
+        Task<bool> PushWithConfirmationAsync<TMessage>(string connectionName, IEnumerable<TMessage> messages, IExchangeConfiguration exchangeConfiguration, Action<BasicProperties> configureProperties = null, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Asynchronously leases a channel from the pool or creates one if necessary.
         /// </summary>
         /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
         /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
         /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
         ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Asynchronously leases a channel from the pool or creates one if necessary.
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the leased channel has to support publisher confirmations, so that the RabbitMQ server acknowledges any
+        /// published message
+        /// </param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
+        ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, bool publisherConfirmationsEnabled, CancellationToken cancellationToken = default);
     }
 }

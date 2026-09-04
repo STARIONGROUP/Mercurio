@@ -102,6 +102,34 @@ namespace Mercurio.Tests.Messaging
         }
 
         [Test]
+        public async Task Should_Pool_Publisher_Confirmations_Channels_Separately()
+        {
+            IChannel plainChannel;
+            IChannel acknowledgingChannel;
+
+            await using (var lease = await this.service.LeaseChannelAsync(ConnectionName))
+            {
+                plainChannel = lease.Channel;
+            }
+
+            await using (var lease = await this.service.LeaseChannelAsync(ConnectionName, true))
+            {
+                acknowledgingChannel = lease.Channel;
+            }
+
+            Assert.That(acknowledgingChannel, Is.Not.SameAs(plainChannel), "a channel supporting publisher confirmations cannot be reused as a regular one");
+
+            await using var pooledPlainLease = await this.service.LeaseChannelAsync(ConnectionName);
+            await using var pooledConfirmationLease = await this.service.LeaseChannelAsync(ConnectionName, true);
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(pooledPlainLease.Channel, Is.SameAs(plainChannel), "each pool hands back its own released channel");
+                Assert.That(pooledConfirmationLease.Channel, Is.SameAs(acknowledgingChannel));
+            }
+        }
+
+        [Test]
         public void Should_Throw_When_Connection_Not_Registered()
         {
             Assert.ThrowsAsync<ArgumentException>(async () => { await this.service.GetConnectionAsync("Unregistered"); });

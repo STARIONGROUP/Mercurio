@@ -40,6 +40,12 @@ namespace Mercurio.Provider
     internal sealed class RabbitMqConnectionProvider : IRabbitMqConnectionProvider, IDisposable
     {
         /// <summary>
+        /// The suffix that is appended to a connection name to identify the pool that holds the channels for which the publisher
+        /// confirmations are enabled
+        /// </summary>
+        private const string ConfirmationPoolKeySuffix = ":confirmations";
+
+        /// <summary>
         /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}" /> that caches <see cref="ActivitySource" /> that will provides traceabilities per connection
         /// </summary>
         private readonly ConcurrentDictionary<string, ActivitySource> activitySources = new();
@@ -48,6 +54,16 @@ namespace Mercurio.Provider
         /// The <see cref="ThreadLocal{IChannel}" /> that holds the current channel for the thread.
         /// </summary>
         private readonly ConcurrentDictionary<string, ConcurrentQueue<IChannel>> channelPool = new();
+
+        /// <summary>
+        /// The <see cref="ConcurrentDictionary{TKey,TValue}" /> that keeps track of the created <see cref="IChannel" /> for which the
+        /// publisher confirmations are enabled
+        /// </summary>
+        /// <remarks>
+        /// The <see cref="IChannel" /> does not expose whether it has been created with publisher confirmations enabled, so the
+        /// provider has to keep track of it to be able to release a channel into the pool it has been leased from
+        /// </remarks>
+        private readonly ConcurrentDictionary<IChannel, bool> confirmationChannels = new();
 
         /// <summary>
         /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}" /> that caches living <see cref="IConnection" /> created based on registered
@@ -134,8 +150,13 @@ namespace Mercurio.Provider
                     existingConnection.Value.Dispose();
                 }
 
-                if (this.channelPool.TryGetValue(existingConnection.Key, out var disposablePool))
+                foreach (var poolKey in new[] { GetPoolKey(existingConnection.Key, false), GetPoolKey(existingConnection.Key, true) })
                 {
+                    if (!this.channelPool.TryGetValue(poolKey, out var disposablePool))
+                    {
+                        continue;
+                    }
+
                     foreach (var channel in disposablePool)
                     {
                         channel.Dispose();
@@ -153,6 +174,7 @@ namespace Mercurio.Provider
                 activitySource?.Dispose();
             }
 
+            this.confirmationChannels.Clear();
             this.connections.Clear();
         }
 
@@ -199,7 +221,26 @@ namespace Mercurio.Provider
         /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
         public async ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, CancellationToken cancellationToken = default)
         {
-            return new ChannelLease(connectionName, await this.GetChannelAsync(connectionName, cancellationToken), this);
+            return await this.LeaseChannelAsync(connectionName, false, cancellationToken);
+        }
+
+        /// <summary>
+        /// Asynchronously leases a channel from the pool or creates one if necessary.
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the leased channel has to support publisher confirmations, so that the RabbitMQ server acknowledges any
+        /// published message
+        /// </param>
+        /// <param name="cancellationToken">An optional <see cref="CancellationToken" /></param>
+        /// <returns>A <see cref="ValueTask{TResult}" /> of <see cref="ChannelLease" /></returns>
+        /// <remarks>
+        /// Channels that support publisher confirmations are pooled separately, since the publisher confirmations can only be enabled
+        /// at the creation of the channel
+        /// </remarks>
+        public async ValueTask<ChannelLease> LeaseChannelAsync(string connectionName, bool publisherConfirmationsEnabled, CancellationToken cancellationToken = default)
+        {
+            return new ChannelLease(connectionName, await this.GetChannelAsync(connectionName, publisherConfirmationsEnabled, cancellationToken), this);
         }
 
         /// <summary>
@@ -267,6 +308,10 @@ namespace Mercurio.Provider
         /// Asynchronously acquires a channel from the pool or creates one if necessary.
         /// </summary>
         /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the acquired channel has to support publisher confirmations, so that the RabbitMQ server acknowledges any
+        /// published message
+        /// </param>
         /// <param name="cancellationToken">
         /// The <see cref="CancellationToken" /> used to observe cancellation requests.
         /// </param>
@@ -276,22 +321,39 @@ namespace Mercurio.Provider
         /// <exception cref="OperationCanceledException">
         /// Thrown if the operation is cancelled before a channel is acquired.
         /// </exception>
-        private async Task<IChannel> GetChannelAsync(string connectionName, CancellationToken cancellationToken = default)
+        private async Task<IChannel> GetChannelAsync(string connectionName, bool publisherConfirmationsEnabled, CancellationToken cancellationToken = default)
         {
             await this.poolGates.GetOrAdd(connectionName, new SemaphoreSlim(this.registeredFactoriesPoolSize[connectionName])).WaitAsync(cancellationToken).ConfigureAwait(false);
 
-            if (!this.channelPool.TryGetValue(connectionName, out var queue) || !queue.TryDequeue(out var channel) || channel is { IsOpen: false })
+            var poolKey = GetPoolKey(connectionName, publisherConfirmationsEnabled);
+
+            if (!this.channelPool.TryGetValue(poolKey, out var queue) || !queue.TryDequeue(out var channel) || channel is { IsOpen: false })
             {
-                channel = await this.CreateChannelWithRetryAsync(connectionName, cancellationToken).ConfigureAwait(false);
+                channel = await this.CreateChannelWithRetryAsync(connectionName, publisherConfirmationsEnabled, cancellationToken).ConfigureAwait(false);
             }
 
             return channel;
         }
 
         /// <summary>
+        /// Computes the key of the channel pool that serves the provided <paramref name="connectionName" />
+        /// </summary>
+        /// <param name="connectionName">The name of the registered connection</param>
+        /// <param name="publisherConfirmationsEnabled">Asserts that the pool holds channels that support publisher confirmations</param>
+        /// <returns>The key of the channel pool</returns>
+        private static string GetPoolKey(string connectionName, bool publisherConfirmationsEnabled)
+        {
+            return publisherConfirmationsEnabled ? connectionName + ConfirmationPoolKeySuffix : connectionName;
+        }
+
+        /// <summary>
         /// Attempts to create a new RabbitMQ channel with retry logic using exponential backoff strategy.
         /// </summary>
         /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the created channel has to support publisher confirmations, so that the RabbitMQ server acknowledges any
+        /// published message
+        /// </param>
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>
         /// A task representing the asynchronous operation. The result is an open <see cref="IChannel" /> for the current thread.
@@ -307,13 +369,19 @@ namespace Mercurio.Provider
         /// Thrown if the operation is cancelled via
         /// <paramref name="cancellationToken" />.
         /// </exception>
-        private async Task<IChannel> CreateChannelWithRetryAsync(string connectionName, CancellationToken cancellationToken)
+        private async Task<IChannel> CreateChannelWithRetryAsync(string connectionName, bool publisherConfirmationsEnabled, CancellationToken cancellationToken)
         {
             var result = await Policy
                 .Handle<Exception>()
                 .WaitAndRetryAsync(this.retryPolicyConfiguration.MaxConnectionRetryAttempts, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
-                    (exception, delay, attemptNumber, _) => this.logger.LogWarning(exception, "ChannelLease creation attempt {Attempt} failed. Retrying in {Delay}", attemptNumber, delay))
-                .ExecuteAndCaptureAsync(() => this.CreateChannelAsync(connectionName, cancellationToken));
+                    (exception, delay, attemptNumber, _) =>
+                    {
+                        if (this.logger.IsEnabled(LogLevel.Warning))
+                        {
+                            this.logger.LogWarning(exception, "ChannelLease creation attempt {Attempt} failed. Retrying in {Delay}", attemptNumber, delay);
+                        }
+                    })
+                .ExecuteAndCaptureAsync(() => this.CreateChannelAsync(connectionName, publisherConfirmationsEnabled, cancellationToken));
 
             if (result.Outcome != OutcomeType.Successful)
             {
@@ -341,9 +409,10 @@ namespace Mercurio.Provider
                 case null:
                     return;
                 case { IsOpen: true }:
-                    this.channelPool.GetOrAdd(connectionName, new ConcurrentQueue<IChannel>()).Enqueue(channel);
+                    this.channelPool.GetOrAdd(GetPoolKey(connectionName, this.confirmationChannels.ContainsKey(channel)), new ConcurrentQueue<IChannel>()).Enqueue(channel);
                     break;
                 default:
+                    this.confirmationChannels.TryRemove(channel, out _);
                     channel.Dispose();
                     break;
             }
@@ -356,16 +425,27 @@ namespace Mercurio.Provider
         /// a new connection is established using the provided connection factory before creating the channel.
         /// </summary>
         /// <param name="connectionName">The name of the registered connection that should be used to establish the connection</param>
+        /// <param name="publisherConfirmationsEnabled">
+        /// Asserts that the created channel has to support publisher confirmations, so that the RabbitMQ server acknowledges any
+        /// published message
+        /// </param>
         /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
         /// <returns>A task that represents the asynchronous operation, containing the created <see cref="IChannel" />.</returns>
         /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the cancellation token.</exception>
         /// <exception cref="InvalidOperationException">Thrown if the connection factory is not properly initialized.</exception>
         /// <exception cref="Exception">Thrown if connection or channel creation fails due to network or server issues.</exception>
-        private async Task<IChannel> CreateChannelAsync(string connectionName, CancellationToken cancellationToken)
+        private async Task<IChannel> CreateChannelAsync(string connectionName, bool publisherConfirmationsEnabled, CancellationToken cancellationToken)
         {
             var connection = await this.GetConnectionAsync(connectionName, cancellationToken).ConfigureAwait(false);
 
-            var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (!publisherConfirmationsEnabled)
+            {
+                return await connection.CreateChannelAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+
+            var options = new CreateChannelOptions(true, true);
+            var channel = await connection.CreateChannelAsync(options, cancellationToken).ConfigureAwait(false);
+            this.confirmationChannels[channel] = true;
 
             return channel;
         }
