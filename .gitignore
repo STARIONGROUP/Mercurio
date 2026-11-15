@@ -331,3 +331,7 @@ ASALocalRun/
 uml4net.xmi.Extensions.EnterpriseArchitect.Tests/Resources/UML_EA.DTD
 
 settings.local.json
+
+# Claude Code local files (per developer, not shared)
+.claude/agent-memory-local/
+CLAUDE.local.md

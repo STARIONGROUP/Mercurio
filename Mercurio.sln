@@ -6,6 +6,7 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution Files", "{D3A0C6A1-81ED-4465-AC01-5320683B61A7}"
 	ProjectSection(SolutionItems) = preProject
 		CITATION.cff = CITATION.cff
+		Directory.Packages.props = Directory.Packages.props
 		mercurio-logo-nugget.png = mercurio-logo-nugget.png
 		mercurio-logo-strapline.png = mercurio-logo-strapline.png
 		mercurio-logo.png = mercurio-logo.png

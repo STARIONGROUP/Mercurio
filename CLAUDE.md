@@ -72,4 +72,6 @@ Branch from `development` and open pull requests against it; never commit direct
 
 ## Releases
 
+Package versions use NuGet Central Package Management: every version is a `PackageVersion` in `Directory.Packages.props`, and a `PackageReference` in a csproj file must not carry a `Version` attribute (restore fails with NU1008 if it does). Adding a package means adding both the `PackageVersion` and the `PackageReference`.
+
 `<Version>` and `<PackageReleaseNotes>` are maintained by hand in both `Mercurio.csproj` and `Mercurio.Hosting.csproj` and are kept in step. The manually triggered `release.yml` workflow builds the GitHub release notes from those `PackageReleaseNotes` elements, updates `CITATION.cff`, packs, pushes to NuGet and tags. Use the `update-package-release-notes` skill in `.claude/skills` when package references or versions change.
