@@ -27,7 +27,7 @@ dotnet test Mercurio.Tests/Mercurio.Tests.csproj --filter "TestCategory!=Integra
 dotnet pack -c Release -o ReleaseBuilds Mercurio.sln
 ```
 
-**Docker must be running for the test projects.** `RabbitMqContainerSetupFixture` is an NUnit `[SetUpFixture]` that starts a `rabbitmq:4.2.0-alpine` Testcontainer once per test assembly, so even a filtered run starts the container. The README's `docker run ... rabbitmq:4-management` instruction predates this; fixtures take host and port from `RabbitMqContainerSetupFixture.RabbitMqContainer`, not from a fixed local broker.
+**Docker must be running for the test projects.** `RabbitMqContainerSetupFixture` is an NUnit `[SetUpFixture]` that starts a `rabbitmq:4.2.0-alpine` Testcontainer once per test assembly, so even a filtered run starts the container. Fixtures take host and port from `RabbitMqContainerSetupFixture.RabbitMqContainer`, not from a fixed local broker.
 
 CI (`.github/workflows/CodeQuality.yml`) builds with `/p:ContinuousIntegrationBuild=true`, runs the two test projects with coverlet and feeds SonarCloud. There is no separate lint step; style is enforced by review and by `Mercurio.sln.DotSettings` (ReSharper/Rider).
 
