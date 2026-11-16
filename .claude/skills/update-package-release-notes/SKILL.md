@@ -7,6 +7,8 @@ description: Updates the PackageReleaseNotes Xml Element in csproj files of all 
 
 ## Instructions
 
+The solution uses NuGet Central Package Management: the `PackageReference` items in the csproj files carry no version, every version is a `PackageVersion` item in `Directory.Packages.props` at the root of the repository. To find the changed versions of a project's PackageReferences, diff `Directory.Packages.props` and keep only the packages that the csproj file references. If `Directory.Packages.props` does not exist at the base tag, read the baseline versions from the `Version` attributes of the `PackageReference` items in the csproj files at that tag instead, so that packages whose version did not change are not reported as updated.
+
 ### Step 1:
 Add, or replace <PackageReleaseNotes> in all non-test-project csproj files in the solution for all latest changed versions of all PackageReferences since the last commit on the development branch that has a tag that does not contain the -rc* suffix. 
 Use syntax 

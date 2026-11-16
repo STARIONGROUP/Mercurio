@@ -9,35 +9,35 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="coverlet.collector" Version="8.0.0">
+        <PackageReference Include="coverlet.collector">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.7" />
-        <PackageReference Include="Moq" Version="4.20.72" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
-        <PackageReference Include="NUnit" Version="4.5.0" />
-        <PackageReference Include="NUnit.Analyzers" Version="4.11.2">
+        <PackageReference Include="Microsoft.Extensions.Configuration" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+        <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+        <PackageReference Include="Moq" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="NUnit" />
+        <PackageReference Include="NUnit.Analyzers">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="NUnit3TestAdapter" Version="6.1.0" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
-        <PackageReference Include="coverlet.msbuild" Version="8.0.0">
+        <PackageReference Include="NUnit3TestAdapter" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="coverlet.msbuild">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.7" />
-        <PackageReference Include="OpenTelemetry" Version="1.15.3" />
-        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
-        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
-        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
-        <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
-        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
-        <PackageReference Include="Testcontainers.RabbitMq" Version="4.11.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+        <PackageReference Include="OpenTelemetry" />
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+        <PackageReference Include="Testcontainers.RabbitMq" />
     </ItemGroup>
 
     <ItemGroup>
