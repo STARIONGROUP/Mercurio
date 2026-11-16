@@ -136,10 +136,10 @@ messageObservable.Subscribe(message => Console.WriteLine(message));
 ```
 
 ## Integration Tests
-Before running any integration tests, it is required to have a running instance of RabbitMQ.  
-Please use this following command to run it :
+The integration tests start their own RabbitMQ container with [Testcontainers](https://dotnet.testcontainers.org/), once per test assembly.  
+The only prerequisite is a running Docker engine; no RabbitMQ instance has to be started manually.
 ```sh
-docker run -d --name mercurio -p 15672:15672 -p 5672:5672 rabbitmq:4-management 
+dotnet test Mercurio.sln
 ```
 
 ## Code Quality
