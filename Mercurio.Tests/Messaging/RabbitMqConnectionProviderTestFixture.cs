@@ -130,9 +130,9 @@ namespace Mercurio.Tests.Messaging
         }
 
         [Test]
-        public void Should_Throw_When_Connection_Not_Registered()
+        public async Task Should_Throw_When_Connection_Not_Registered()
         {
-            Assert.ThrowsAsync<ArgumentException>(async () => { await this.service.GetConnectionAsync("Unregistered"); });
+            await Assert.ThrowsAsync<ArgumentException>(async () => { await this.service.GetConnectionAsync("Unregistered"); });
         }
     }
 }

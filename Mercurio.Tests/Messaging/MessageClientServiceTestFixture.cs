@@ -483,28 +483,33 @@ namespace Mercurio.Tests.Messaging
            
            var exchangeConfiguration = new DefaultExchangeConfiguration("DefaultChannelForActivity");
            var listenObservable = await this.firstService.ListenAsync<string>(FirstConnectionName, exchangeConfiguration);
-           var firstTaskCompletion = new TaskCompletionSource<string>();
-           
+           var allMessagesReceived = new TaskCompletionSource<string>();
+           var receivedMessagesCount = 0;
+
            using var _ = listenObservable.Subscribe(message =>
            {
-               firstTaskCompletion.TrySetResult(message);
+               if (Interlocked.Increment(ref receivedMessagesCount) == 2)
+               {
+                   allMessagesReceived.TrySetResult(message);
+               }
            });
-           
+
            await Task.Delay(TimeOut);
-            
+
            await this.secondService.PushAsync(SecondConnectionName, [FirstSentMessage,SecondSentMessage], exchangeConfiguration);
-           await firstTaskCompletion.Task;
+           await allMessagesReceived.Task;
 
            using (Assert.EnterMultipleScope())
-           { 
-               Assert.That(activities, Has.Count.EqualTo(5));
+           {
+               Assert.That(activities, Has.Count.EqualTo(6));
                Assert.That(activities.ElementAt(0).OperationName, Is.EqualTo("Parent"));
                Assert.That(activities.ElementAt(1).OperationName, Is.EqualTo("Push String collection [Queue: DefaultChannelForActivity]"));
                Assert.That(activities.ElementAt(2).OperationName, Is.EqualTo("Push String collection [Queue: DefaultChannelForActivity] [1/2]"));
                Assert.That(activities.ElementAt(3).OperationName, Is.EqualTo("Push String collection [Queue: DefaultChannelForActivity] [2/2]"));
                Assert.That(activities.ElementAt(4).OperationName, Is.EqualTo("String Received [Queue: DefaultChannelForActivity]"));
+               Assert.That(activities.ElementAt(5).OperationName, Is.EqualTo("String Received [Queue: DefaultChannelForActivity]"));
            }
-           
+
            Activity.CurrentChanged -= ActivityOnCurrentChanged;
            return;
 
